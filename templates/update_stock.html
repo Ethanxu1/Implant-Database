@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Stock - Dental Implant Inventory{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-{{ 'plus' if action == 'Add' else 'minus' }}"></i> 
+                    {{ action }} Stock - {{ implant.brand }} {{ implant.size }}
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <strong>Current Stock:</strong> {{ implant.stock }}<br>
+                    <strong>Minimum Stock:</strong> {{ implant.min_stock }}
+                </div>
+                
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">Quantity to {{ action }} *</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" 
+                               min="1" value="1" required>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('index', search=search, size_filter=size_filter) }}" class="btn btn-outline-secondary me-md-2">Cancel</a>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-{{ 'plus' if action == 'Add' else 'minus' }}"></i> 
+                            {{ action }} Stock
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

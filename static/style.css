@@ -1,0 +1,107 @@
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+.card {
+    box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.125);
+    margin-bottom: 1.5rem;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    background-color: #343a40;
+    color: white;
+}
+
+.btn-group-sm > .btn {
+    padding: 0.375rem 0.5rem;
+}
+
+.badge {
+    font-size: 0.8em;
+    padding: 0.4em 0.6em;
+}
+
+.alert ul {
+    margin-bottom: 0;
+}
+
+.input-group.input-group-sm {
+    width: auto;
+}
+
+/* Custom styles for the inventory table */
+.table-warning {
+    background-color: #fff3cd !important;
+}
+
+.table-warning:hover {
+    background-color: #ffeaa7 !important;
+}
+
+/* Login and register forms */
+.auth-card {
+    max-width: 400px;
+    margin: 2rem auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .btn-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    .btn-group .btn {
+        flex: 1;
+        margin-bottom: 0.25rem;
+        border-radius: 0.25rem !important;
+    }
+    
+    .input-group.input-group-sm {
+        width: 100%;
+    }
+    
+    .navbar-nav {
+        text-align: center;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+}
+
+/* Card statistics */
+.card .card-body.text-center {
+    padding: 1.25rem;
+}
+
+.card .card-title {
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Filter form improvements */
+.form-text {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+/* Better table alignment */
+.table td.align-middle {
+    vertical-align: middle;
+}
+
+/* Action buttons spacing */
+.btn-group-sm > .btn {
+    margin: 0 1px;
+}
