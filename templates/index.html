@@ -13,35 +13,30 @@
 </div>
 
 <!-- Search and Filter Form -->
+
 <div class="card mb-4">
-    <div class="card-body">
-        <form method="GET" id="filterForm" class="row g-3">
-            <div class="col-md-4">
-                <label for="search" class="form-label">Search Brand</label>
-                <input type="text" class="form-control" id="search" name="search" placeholder="Type brand name..." 
-                       value="{{ search }}">
-            </div>
-            <div class="col-md-4">
-                <label for="size_filter" class="form-label">Filter by Size</label>
-                <input type="text" class="form-control" id="size_filter" name="size_filter" 
-                       placeholder="e.g., 4 or 4.5x" value="{{ size_filter }}">
-                <div class="form-text">Shows sizes containing your text</div>
-            </div>
-            <div class="col-md-4">
-                <label for="brand_filter" class="form-label">Filter by Brand</label>
-                <select class="form-select" id="brand_filter" name="brand_filter">
-                    <option value="">All brands...</option>
-                    {% for brand in brands %}
-                        <option value="{{ brand }}" {% if brand_filter == brand %}selected{% endif %}>{{ brand }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-12">
-                <button type="submit" class="btn btn-primary me-2">Apply Filters</button>
-                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Clear All</a>
-            </div>
-        </form>
-    </div>
+  <div class="card-body">
+    <form method="GET" id="filterForm" class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label for="size_filter" class="form-label">Filter by Size</label>
+        <input type="text" class="form-control" id="size_filter" name="size_filter" 
+               placeholder="e.g., 4 or 4.5x" value="{{ size_filter }}">
+      </div>
+      <div class="col-md-4">
+        <label for="brand_filter" class="form-label">Filter by Brand</label>
+        <select class="form-select" id="brand_filter" name="brand_filter">
+          <option value="">All brands...</option>
+          {% for brand in brands %}
+            <option value="{{ brand }}" {% if brand_filter == brand %}selected{% endif %}>{{ brand }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Apply Filters</button>
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Clear All</a>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- Low Stock Alert -->
