@@ -63,7 +63,6 @@
                         <th>Size</th>
                         <th>Brand</th>
                         <th>Current Stock</th>
-                        <th>Minimum Stock</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -77,14 +76,6 @@
                             <span class="badge {% if implant.stock > implant.min_stock %}bg-success{% else %}bg-danger{% endif %} fs-6">
                                 {{ implant.stock }}
                             </span>
-                        </td>
-                        <td class="align-middle">
-                            <form method="POST" action="{{ url_for('update_min_stock', implant_id=implant.id, search=search, size_filter=size_filter, brand_filter=brand_filter) }}" class="d-inline">
-                                <div class="input-group input-group-sm" style="width: 140px;">
-                                    <input type="number" class="form-control" name="min_stock" value="{{ implant.min_stock }}" min="0">
-                                    <button type="submit" class="btn btn-outline-primary">Update</button>
-                                </div>
-                            </form>
                         </td>
                         <td class="align-middle">
                             {% if implant.is_low_stock() %}
