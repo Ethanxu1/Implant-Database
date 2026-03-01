@@ -240,6 +240,7 @@ tr.table-warning:hover > th {
   background-color: rgba(139, 100, 24, 0.13) !important;
 }
 
+
 /* Out-of-stock rows (red) */
 tr.table-out-of-stock {
   --bs-table-bg: var(--crit-bg);
@@ -474,6 +475,11 @@ tr.table-out-of-stock:hover > th {
   background: var(--info-bg) !important;
   color: var(--info-col) !important;
   border: 1px solid var(--info-border);
+}
+.badge.bg-no-alert {
+  background: rgba(28, 42, 58, 0.07) !important;
+  color: rgba(28, 42, 58, 0.65) !important;
+  border: 1px solid rgba(28, 42, 58, 0.14);
 }
 /* Stock count badge - Lora number */
 .badge.fs-6 {
