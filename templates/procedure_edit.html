@@ -159,7 +159,7 @@
                             {% for implant in picker_implants %}
                             {% set op = other_pending_counts.get(implant.id, 0) %}
                             {% set avail = implant.stock - op if implant.stock > op else 0 %}
-                            <tr class="{% if implant.is_low_stock() %}table-warning{% endif %}">
+                            <tr class="{% if avail == 0 %}table-out-of-stock{% elif implant.is_low_stock() %}table-warning{% endif %}">
                                 <td>{{ implant.size }}</td>
                                 <td>{{ implant.brand }}</td>
                                 <td>
