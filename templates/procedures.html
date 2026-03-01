@@ -27,6 +27,7 @@
             implants for <strong>{{ undo_procedure.patient_name }}</strong> have been deducted from stock.
         </div>
         <form method="POST" action="{{ url_for('undo_procedure', procedure_id=undo_procedure.id) }}" class="d-inline flex-shrink-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-outline-secondary">
                 <i class="fas fa-rotate-left me-1"></i>Undo
             </button>
@@ -84,6 +85,7 @@
                   data-action="confirm-procedure"
                   data-patient-name="{{ proc.patient_name }}"
                   data-procedure-id="{{ proc.id }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-success btn-sm"
                     {% if not proc.items %}
                         disabled title="Add at least one implant before confirming"
@@ -100,6 +102,7 @@
             <form method="POST" action="{{ url_for('cancel_procedure', procedure_id=proc.id) }}" class="d-inline ms-auto"
                   data-action="cancel-procedure"
                   data-patient-name="{{ proc.patient_name }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-outline-danger btn-sm">
                     <i class="fas fa-xmark me-1"></i>Cancel
                 </button>

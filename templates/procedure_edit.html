@@ -26,6 +26,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('edit_procedure', procedure_id=procedure.id, size_filter=size_filter, brand_filter=brand_filter) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label">Patient Name *</label>
                         <input type="text" class="form-control" name="patient_name"
@@ -92,6 +93,7 @@
                                   action="{{ url_for('remove_procedure_implant', procedure_id=procedure.id, item_id=item.id) }}"
                                   class="d-inline"
                                   data-action="remove-procedure-implant">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="size_filter" value="{{ size_filter }}">
                                 <input type="hidden" name="brand_filter" value="{{ brand_filter }}">
                                 <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove">
@@ -179,6 +181,7 @@
                                           data-brand="{{ implant.brand }}"
                                           data-size="{{ implant.size }}"
                                           data-procedure-id="{{ procedure.id }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <input type="hidden" name="implant_id" value="{{ implant.id }}">
                                         <input type="hidden" name="size_filter" value="{{ size_filter }}">
                                         <input type="hidden" name="brand_filter" value="{{ brand_filter }}">
