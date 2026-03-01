@@ -87,15 +87,22 @@ function stockState(stock, hasThreshold, minStock) {
 
 // ── Helper: update stock badge and row highlight ──────────────────────────────
 
-function applyStockState(stockBadge, row, stock, state) {
+function applyStockState(stockBadge, row, stock, state, hasThreshold) {
   stockBadge.textContent = stock;
-  var badgeClass = state === 'empty' ? 'bg-out-of-stock'
-                 : state === 'low'   ? 'bg-danger'
-                 :                     'bg-success';
+  var badgeClass, rowClass;
+  if (!hasThreshold) {
+    badgeClass = 'bg-no-alert';
+    rowClass   = 'table-no-alert';
+  } else {
+    badgeClass = state === 'empty' ? 'bg-out-of-stock'
+               : state === 'low'   ? 'bg-danger'
+               :                     'bg-success';
+    rowClass   = state === 'empty' ? 'table-out-of-stock'
+               : state === 'low'   ? 'table-warning'
+               :                     '';
+  }
   stockBadge.className = 'badge ' + badgeClass + ' fs-6';
-  row.className = state === 'empty' ? 'table-out-of-stock'
-                : state === 'low'   ? 'table-warning'
-                :                     '';
+  row.className = rowClass;
 }
 
 // ── 1. Use Implant (inventory page) ──────────────────────────────────────────
@@ -124,7 +131,7 @@ document.addEventListener('click', function (e) {
 
   // Optimistic update
   btn.classList.add('is-loading');
-  applyStockState(stockBadge, row, newStock, newState);
+  applyStockState(stockBadge, row, newStock, newState, hasThreshold);
   if (unitsCard) unitsCard.textContent = parseInt(unitsCard.textContent, 10) - 1;
 
   var url = btn.closest('form').action;
@@ -134,14 +141,14 @@ document.addEventListener('click', function (e) {
       if (data.ok) {
         showToast(data.message, 'info');
       } else {
-        applyStockState(stockBadge, row, oldStock, oldState);
+        applyStockState(stockBadge, row, oldStock, oldState, hasThreshold);
         if (unitsCard) unitsCard.textContent = parseInt(unitsCard.textContent, 10) + 1;
         showToast(data.message, 'warning');
       }
     })
     .catch(function () {
       btn.classList.remove('is-loading');
-      applyStockState(stockBadge, row, oldStock, oldState);
+      applyStockState(stockBadge, row, oldStock, oldState, hasThreshold);
       if (unitsCard) unitsCard.textContent = parseInt(unitsCard.textContent, 10) + 1;
       showToast('Action failed — please try again.', 'danger');
     });
