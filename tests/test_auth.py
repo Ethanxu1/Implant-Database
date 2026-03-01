@@ -64,8 +64,8 @@ class TestRegister:
             "/register",
             data={
                 "username": "newuser",
-                "password": "securepass",
-                "confirm_password": "securepass",
+                "password": "securepassword1",
+                "confirm_password": "securepassword1",
             },
             follow_redirects=True,
         )
@@ -78,20 +78,20 @@ class TestRegister:
             "/register",
             data={
                 "username": "testuser",
-                "password": "pass",
-                "confirm_password": "pass",
+                "password": "securepassword1",
+                "confirm_password": "securepassword1",
             },
             follow_redirects=True,
         )
-        assert b"Username already exists" in resp.data
+        assert b"not available" in resp.data
 
     def test_register_password_mismatch(self, client):
         resp = client.post(
             "/register",
             data={
                 "username": "newuser",
-                "password": "pass1",
-                "confirm_password": "pass2",
+                "password": "securepassword1",
+                "confirm_password": "securepassword2",
             },
             follow_redirects=True,
         )
@@ -121,22 +121,22 @@ class TestChangePassword:
             "/change_password",
             data={
                 "current_password": "password123",
-                "new_password": "newpassword",
-                "confirm_password": "newpassword",
+                "new_password": "newpassword123",
+                "confirm_password": "newpassword123",
             },
             follow_redirects=True,
         )
         assert b"Password changed successfully" in resp.data
         db.session.refresh(user)
-        assert user.check_password("newpassword") is True
+        assert user.check_password("newpassword123") is True
 
     def test_change_password_wrong_current(self, auth_client, user):
         resp = auth_client.post(
             "/change_password",
             data={
                 "current_password": "wrong",
-                "new_password": "newpassword",
-                "confirm_password": "newpassword",
+                "new_password": "newpassword123",
+                "confirm_password": "newpassword123",
             },
             follow_redirects=True,
         )
@@ -149,8 +149,8 @@ class TestChangePassword:
             "/change_password",
             data={
                 "current_password": "password123",
-                "new_password": "new1",
-                "confirm_password": "new2",
+                "new_password": "newpassword123",
+                "confirm_password": "newpassword456",
             },
             follow_redirects=True,
         )

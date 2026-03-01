@@ -15,31 +15,49 @@ function showToast(message, type, options) {
     info:    'fa-circle-info',
   };
 
-  const undoHtml = options.undoUrl
-    ? '<button class="app-toast-undo" data-url="' + options.undoUrl + '">' +
-      '<i class="fas fa-rotate-left"></i> Undo</button>'
-    : '';
-
   const el = document.createElement('div');
   el.id = id;
   el.className = 'app-toast app-toast-' + type;
-  el.innerHTML =
-    '<div class="app-toast-body">' +
-      '<i class="fas ' + (icons[type] || icons.info) + ' app-toast-icon"></i>' +
-      '<span class="app-toast-message">' + message + '</span>' +
-      undoHtml +
-      '<button class="app-toast-close" onclick="dismissToast(\'' + id + '\')">' +
-        '<i class="fas fa-xmark"></i>' +
-      '</button>' +
-    '</div>';
 
+  var bodyDiv = document.createElement('div');
+  bodyDiv.className = 'app-toast-body';
+
+  var icon = document.createElement('i');
+  icon.className = 'fas ' + (icons[type] || icons.info) + ' app-toast-icon';
+  bodyDiv.appendChild(icon);
+
+  var msgSpan = document.createElement('span');
+  msgSpan.className = 'app-toast-message';
+  msgSpan.textContent = message;
+  bodyDiv.appendChild(msgSpan);
+
+  if (options.undoUrl) {
+    var undoBtn = document.createElement('button');
+    undoBtn.className = 'app-toast-undo';
+    undoBtn.dataset.url = options.undoUrl;
+    var undoIcon = document.createElement('i');
+    undoIcon.className = 'fas fa-rotate-left';
+    undoBtn.appendChild(undoIcon);
+    undoBtn.appendChild(document.createTextNode(' Undo'));
+    bodyDiv.appendChild(undoBtn);
+  }
+
+  var closeBtn = document.createElement('button');
+  closeBtn.className = 'app-toast-close';
+  closeBtn.addEventListener('click', function () { dismissToast(id); });
+  var closeIcon = document.createElement('i');
+  closeIcon.className = 'fas fa-xmark';
+  closeBtn.appendChild(closeIcon);
+  bodyDiv.appendChild(closeBtn);
+
+  el.appendChild(bodyDiv);
   container.appendChild(el);
 
   var delay = options.undoUrl ? 10000 : 4000;
   el._timer = setTimeout(function () { dismissToast(id); }, delay);
 
   if (options.undoUrl) {
-    el.querySelector('.app-toast-undo').addEventListener('click', function () {
+    undoBtn.addEventListener('click', function () {
       clearTimeout(el._timer);
       dismissToast(id);
       fetchAction(options.undoUrl, { method: 'POST' })
@@ -69,7 +87,12 @@ function dismissToast(id) {
 
 function fetchAction(url, options) {
   options = options || {};
-  var headers = Object.assign({ 'X-Requested-With': 'XMLHttpRequest' }, options.headers || {});
+  var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  var baseHeaders = {
+    'X-Requested-With': 'XMLHttpRequest',
+    'X-CSRFToken': csrfMeta ? csrfMeta.content : '',
+  };
+  var headers = Object.assign(baseHeaders, options.headers || {});
   return fetch(url, Object.assign({}, options, { headers: headers }))
     .then(function (resp) {
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -176,14 +199,25 @@ document.addEventListener('submit', function (e) {
   var tempRow = document.createElement('div');
   tempRow.className = 'procedure-item-row';
   tempRow.id = tempId;
-  tempRow.innerHTML =
-    '<div>' +
-      '<div class="procedure-item-name">' + brand + ' ' + size + '</div>' +
-      '<div class="procedure-item-qty">Qty: ' + quantity + '</div>' +
-    '</div>' +
-    '<button class="btn btn-outline-danger btn-sm" disabled>' +
-      '<i class="fas fa-spinner fa-spin"></i>' +
-    '</button>';
+
+  var infoDiv = document.createElement('div');
+  var nameDiv = document.createElement('div');
+  nameDiv.className = 'procedure-item-name';
+  nameDiv.textContent = brand + ' ' + size;
+  var qtyDiv = document.createElement('div');
+  qtyDiv.className = 'procedure-item-qty';
+  qtyDiv.textContent = 'Qty: ' + quantity;
+  infoDiv.appendChild(nameDiv);
+  infoDiv.appendChild(qtyDiv);
+  tempRow.appendChild(infoDiv);
+
+  var disabledBtn = document.createElement('button');
+  disabledBtn.className = 'btn btn-outline-danger btn-sm';
+  disabledBtn.disabled = true;
+  var spinner = document.createElement('i');
+  spinner.className = 'fas fa-spinner fa-spin';
+  disabledBtn.appendChild(spinner);
+  tempRow.appendChild(disabledBtn);
 
   if (emptyMsg) emptyMsg.style.display = 'none';
   list.appendChild(tempRow);
@@ -210,40 +244,91 @@ document.addEventListener('submit', function (e) {
           var setQtyUrl   = '/procedures/' + procedureId + '/item/' + data.item_id + '/set-quantity';
           var removeUrl   = '/procedures/' + procedureId + '/remove-implant/' + data.item_id;
 
-          var warnHtml = data.warning
-            ? '<span class="text-warning ms-1 item-stock-warning"' +
-              ' title="Quantity exceeds available stock after other pending procedures">' +
-              '<i class="fas fa-triangle-exclamation"></i></span>'
-            : '';
-
           var realRow = document.createElement('div');
           realRow.className = 'procedure-item-row';
-          realRow.dataset.itemId   = data.item_id;
-          realRow.dataset.stock    = data.stock;
+          realRow.dataset.itemId    = data.item_id;
+          realRow.dataset.stock     = data.stock;
           realRow.dataset.available = data.available;
-          realRow.innerHTML =
-            '<div class="procedure-item-name">' + data.brand + ' ' + data.size + warnHtml + '</div>' +
-            '<div class="procedure-item-controls">' +
-              '<button type="button" class="btn btn-outline-secondary btn-sm procedure-qty-btn"' +
-                  ' title="Decrease" data-action="adjust-item-qty" data-delta="-1"' +
-                  ' data-item-id="' + data.item_id + '" data-set-url="' + setQtyUrl + '">' +
-                '<i class="fas fa-minus"></i>' +
-              '</button>' +
-              '<span class="procedure-item-qty-val">' + data.quantity + '</span>' +
-              '<button type="button" class="btn btn-outline-secondary btn-sm procedure-qty-btn"' +
-                  ' title="Increase" data-action="adjust-item-qty" data-delta="1"' +
-                  ' data-item-id="' + data.item_id + '" data-set-url="' + setQtyUrl + '">' +
-                '<i class="fas fa-plus"></i>' +
-              '</button>' +
-              '<form method="POST" action="' + removeUrl + '" class="d-inline"' +
-                  ' data-action="remove-procedure-implant">' +
-                '<input type="hidden" name="size_filter" value="' + sizeFilter + '">' +
-                '<input type="hidden" name="brand_filter" value="' + brandFilter + '">' +
-                '<button type="submit" class="btn btn-outline-danger btn-sm" title="Remove">' +
-                  '<i class="fas fa-xmark"></i>' +
-                '</button>' +
-              '</form>' +
-            '</div>';
+
+          // Name div — textContent keeps brand/size safe
+          var realNameDiv = document.createElement('div');
+          realNameDiv.className = 'procedure-item-name';
+          realNameDiv.textContent = data.brand + ' ' + data.size;
+          realRow.appendChild(realNameDiv);
+          applyWarningIcon(realRow, data.warning);
+
+          // Controls div
+          var ctrlDiv = document.createElement('div');
+          ctrlDiv.className = 'procedure-item-controls';
+
+          var decBtn = document.createElement('button');
+          decBtn.type = 'button';
+          decBtn.className = 'btn btn-outline-secondary btn-sm procedure-qty-btn';
+          decBtn.title = 'Decrease';
+          decBtn.dataset.action  = 'adjust-item-qty';
+          decBtn.dataset.delta   = '-1';
+          decBtn.dataset.itemId  = data.item_id;
+          decBtn.dataset.setUrl  = setQtyUrl;
+          var minusI = document.createElement('i');
+          minusI.className = 'fas fa-minus';
+          decBtn.appendChild(minusI);
+          ctrlDiv.appendChild(decBtn);
+
+          var qtySpan = document.createElement('span');
+          qtySpan.className = 'procedure-item-qty-val';
+          qtySpan.textContent = data.quantity;
+          ctrlDiv.appendChild(qtySpan);
+
+          var incBtn = document.createElement('button');
+          incBtn.type = 'button';
+          incBtn.className = 'btn btn-outline-secondary btn-sm procedure-qty-btn';
+          incBtn.title = 'Increase';
+          incBtn.dataset.action  = 'adjust-item-qty';
+          incBtn.dataset.delta   = '1';
+          incBtn.dataset.itemId  = data.item_id;
+          incBtn.dataset.setUrl  = setQtyUrl;
+          var plusI = document.createElement('i');
+          plusI.className = 'fas fa-plus';
+          incBtn.appendChild(plusI);
+          ctrlDiv.appendChild(incBtn);
+
+          // Remove form — .value setter safely encodes sizeFilter/brandFilter
+          var rmForm = document.createElement('form');
+          rmForm.method = 'POST';
+          rmForm.action = removeUrl;
+          rmForm.className = 'd-inline';
+          rmForm.dataset.action = 'remove-procedure-implant';
+
+          var csrfInput = document.createElement('input');
+          csrfInput.type = 'hidden';
+          csrfInput.name = 'csrf_token';
+          var csrfMeta2 = document.querySelector('meta[name="csrf-token"]');
+          csrfInput.value = csrfMeta2 ? csrfMeta2.content : '';
+          rmForm.appendChild(csrfInput);
+
+          var sfInput = document.createElement('input');
+          sfInput.type = 'hidden';
+          sfInput.name = 'size_filter';
+          sfInput.value = sizeFilter;
+          rmForm.appendChild(sfInput);
+
+          var bfInput = document.createElement('input');
+          bfInput.type = 'hidden';
+          bfInput.name = 'brand_filter';
+          bfInput.value = brandFilter;
+          rmForm.appendChild(bfInput);
+
+          var rmBtn = document.createElement('button');
+          rmBtn.type = 'submit';
+          rmBtn.className = 'btn btn-outline-danger btn-sm';
+          rmBtn.title = 'Remove';
+          var xmarkI = document.createElement('i');
+          xmarkI.className = 'fas fa-xmark';
+          rmBtn.appendChild(xmarkI);
+          rmForm.appendChild(rmBtn);
+
+          ctrlDiv.appendChild(rmForm);
+          realRow.appendChild(ctrlDiv);
 
           var placeholder = document.getElementById(tempId);
           if (placeholder) placeholder.replaceWith(realRow);
