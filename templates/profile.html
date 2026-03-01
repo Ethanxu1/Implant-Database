@@ -23,18 +23,22 @@
                 
                 <h5 class="mb-3">Change Password</h5>
                 <form method="POST" action="{{ url_for('change_password') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="row mb-3">
                         <div class="col-md-4">
                             <label for="current_password" class="form-label">Current Password</label>
-                            <input type="password" class="form-control" id="current_password" name="current_password" required>
+                            <input type="password" class="form-control" id="current_password" name="current_password"
+                                   autocomplete="current-password" required>
                         </div>
                         <div class="col-md-4">
                             <label for="new_password" class="form-label">New Password</label>
-                            <input type="password" class="form-control" id="new_password" name="new_password" required>
+                            <input type="password" class="form-control" id="new_password" name="new_password"
+                                   autocomplete="new-password" minlength="10" required>
                         </div>
                         <div class="col-md-4">
                             <label for="confirm_password" class="form-label">Confirm New Password</label>
-                            <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                            <input type="password" class="form-control" id="confirm_password" name="confirm_password"
+                                   autocomplete="new-password" minlength="10" required>
                         </div>
                     </div>
                     
@@ -50,10 +54,12 @@
                     <h6><i class="fas fa-exclamation-triangle"></i> Delete Account</h6>
                     <p class="mb-3">This action cannot be undone. This will permanently delete your account and all your implant data.</p>
                     <form method="POST" action="{{ url_for('delete_account') }}" onsubmit="return confirm('Are you sure you want to delete your account? This action cannot be undone!');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="row">
                             <div class="col-md-6">
                                 <label for="password" class="form-label">Confirm Password to Delete Account</label>
-                                <input type="password" class="form-control" id="password" name="password" required>
+                                <input type="password" class="form-control" id="password" name="password"
+                                       autocomplete="current-password" required>
                             </div>
                             <div class="col-md-6 d-flex align-items-end">
                                 <button type="submit" class="btn btn-danger w-100">

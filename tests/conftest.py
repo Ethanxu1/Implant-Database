@@ -13,6 +13,8 @@ def app():
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
         WTF_CSRF_ENABLED=False,
         SECRET_KEY="test-secret-key",
+        SESSION_COOKIE_SECURE=False,
+        RATELIMIT_ENABLED=False,
     )
     with flask_app.app_context():
         _db.create_all()

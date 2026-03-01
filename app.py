@@ -16,9 +16,13 @@ from flask_login import (
     current_user,
 )
 from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from database import db, Implant, User, Procedure, ProcedureImplant
 from werkzeug.middleware.proxy_fix import ProxyFix
-from datetime import datetime
+from urllib.parse import urlparse, urljoin
+from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 
@@ -28,9 +32,15 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///inventory.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+csrf = CSRFProtect(app)
 db.init_app(app)
+limiter = Limiter(key_func=get_remote_address, app=app, default_limits=[])
 
 migrate = Migrate(app, db, render_as_batch=True)
 
@@ -47,6 +57,38 @@ login_manager.login_message = "Please log in to access this page."
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+
+def is_safe_url(target):
+    """Return True only if target redirects to the same host (F-01 fix)."""
+    ref = urlparse(request.host_url)
+    test = urlparse(urljoin(request.host_url, target))
+    return test.scheme in ("http", "https") and ref.netloc == test.netloc
+
+
+@app.after_request
+def set_security_headers(response):
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Strict-Transport-Security"] = (
+        "max-age=31536000; includeSubDomains; preload"
+    )
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com "
+        "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+        "img-src 'self' data:; "
+        "frame-ancestors 'none';"
+    )
+    if request.endpoint and request.endpoint != "static":
+        response.headers["Cache-Control"] = (
+            "no-store, no-cache, must-revalidate, private"
+        )
+    return response
 
 
 # Updated dental implant brands
@@ -167,19 +209,22 @@ def index():
 
 # Authentication routes
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute", exempt_when=lambda: app.testing)
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
 
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
         user = User.query.filter_by(username=username).first()
 
         if user and user.check_password(password):
             login_user(user)
             next_page = request.args.get("next")
-            return redirect(next_page) if next_page else redirect(url_for("index"))
+            if next_page and is_safe_url(next_page):
+                return redirect(next_page)
+            return redirect(url_for("index"))
         else:
             flash("Invalid username or password", "danger")
 
@@ -200,16 +245,20 @@ def register():
         return redirect(url_for("index"))
 
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        confirm_password = request.form["confirm_password"]
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if len(password) < 10 or not any(c.isdigit() for c in password):
+            flash("Password must be at least 10 characters and include at least one number.", "danger")
+            return render_template("register.html")
 
         if password != confirm_password:
             flash("Passwords do not match", "danger")
             return render_template("register.html")
 
         if User.query.filter_by(username=username).first():
-            flash("Username already exists", "danger")
+            flash("That username is not available. Please choose another.", "danger")
             return render_template("register.html")
 
         user = User(username=username)
@@ -232,12 +281,16 @@ def profile():
 @app.route("/change_password", methods=["POST"])
 @login_required
 def change_password():
-    current_password = request.form["current_password"]
-    new_password = request.form["new_password"]
-    confirm_password = request.form["confirm_password"]
+    current_password = request.form.get("current_password", "")
+    new_password = request.form.get("new_password", "")
+    confirm_password = request.form.get("confirm_password", "")
 
     if not current_user.check_password(current_password):
         flash("Current password is incorrect", "danger")
+        return redirect(url_for("profile"))
+
+    if len(new_password) < 10 or not any(c.isdigit() for c in new_password):
+        flash("New password must be at least 10 characters and include at least one number.", "danger")
         return redirect(url_for("profile"))
 
     if new_password != confirm_password:
@@ -877,6 +930,17 @@ def update_min_stock(implant_id):
 #             db.session.add(user)
 #             db.session.commit()
 #             print("Default user created: username='user', password='password123'")
+
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template("404.html"), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    app.logger.error(e)
+    return render_template("500.html"), 500
 
 
 def init_db():
