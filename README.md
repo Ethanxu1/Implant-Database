@@ -16,7 +16,7 @@ A web application for tracking dental implant inventory by size and brand. Built
 - **Backend:** Flask 3, SQLAlchemy, SQLite
 - **Auth:** Flask-Login, Werkzeug password hashing
 - **Frontend:** Jinja2 templates, Bootstrap 5.3 (grid/utilities), custom CSS
-- **Theme:** Executive Dark — navy + champagne gold, Cinzel/Lora/DM Sans fonts
+- **Theme:** Slate — light mode, cool blue-grey background, dark navy headers, steel blue accent, Cinzel/Lora/DM Sans fonts
 
 ## Getting Started
 
@@ -64,7 +64,11 @@ The app will be available at `http://localhost:5000`.
 | `/use/<id>` | Decrement stock by 1 |
 | `/add_stock/<id>` | Add quantity to stock |
 | `/remove/<id>` | Delete an implant |
+| `/update_min_stock/<id>` | Update minimum stock threshold |
 | `/profile` | Change password / delete account |
+| `/procedures` | Procedure log |
+| `/procedures/new` | Log a new procedure |
+| `/procedures/<id>/edit` | Edit a procedure |
 
 ## Deployment Notes
 
