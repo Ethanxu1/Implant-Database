@@ -52,25 +52,43 @@
             <div class="card-body p-0">
                 <div class="procedure-items-list" id="selected-items-list">
                     {% for item in procedure.items %}
-                    <div class="procedure-item-row" data-item-id="{{ item.id }}">
-                        <div>
-                            {% if item.implant %}
-                            <div class="procedure-item-name">{{ item.implant.brand }} {{ item.implant.size }}</div>
-                            {% else %}
-                            <div class="procedure-item-name" style="color:var(--text-dim)">(removed implant)</div>
-                            {% endif %}
-                            <div class="procedure-item-qty">Qty: {{ item.quantity }}</div>
-                        </div>
-                        <form method="POST"
-                              action="{{ url_for('remove_procedure_implant', procedure_id=procedure.id, item_id=item.id) }}"
-                              class="d-inline"
-                              data-action="remove-procedure-implant">
-                            <input type="hidden" name="size_filter" value="{{ size_filter }}">
-                            <input type="hidden" name="brand_filter" value="{{ brand_filter }}">
-                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove">
-                                <i class="fas fa-xmark"></i>
+                    <div class="procedure-item-row" data-item-id="{{ item.id }}"
+                         data-stock="{{ item.implant.stock if item.implant else 0 }}">
+                        {% if item.implant %}
+                        <div class="procedure-item-name">{{ item.implant.brand }} {{ item.implant.size }}</div>
+                        {% else %}
+                        <div class="procedure-item-name" style="color:var(--text-dim)">(removed implant)</div>
+                        {% endif %}
+                        <div class="procedure-item-controls">
+                            <button type="button" class="btn btn-outline-secondary btn-sm procedure-qty-btn"
+                                    title="Decrease"
+                                    data-action="adjust-item-qty"
+                                    data-delta="-1"
+                                    data-item-id="{{ item.id }}"
+                                    data-set-url="{{ url_for('set_procedure_item_quantity', procedure_id=procedure.id, item_id=item.id) }}">
+                                <i class="fas fa-minus"></i>
                             </button>
-                        </form>
+                            <span class="procedure-item-qty-val">{{ item.quantity }}</span>
+                            <button type="button" class="btn btn-outline-secondary btn-sm procedure-qty-btn"
+                                    title="Increase"
+                                    data-action="adjust-item-qty"
+                                    data-delta="1"
+                                    data-item-id="{{ item.id }}"
+                                    data-set-url="{{ url_for('set_procedure_item_quantity', procedure_id=procedure.id, item_id=item.id) }}"
+                                    {% if item.implant and item.quantity >= item.implant.stock %}disabled{% endif %}>
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            <form method="POST"
+                                  action="{{ url_for('remove_procedure_implant', procedure_id=procedure.id, item_id=item.id) }}"
+                                  class="d-inline"
+                                  data-action="remove-procedure-implant">
+                                <input type="hidden" name="size_filter" value="{{ size_filter }}">
+                                <input type="hidden" name="brand_filter" value="{{ brand_filter }}">
+                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove">
+                                    <i class="fas fa-xmark"></i>
+                                </button>
+                            </form>
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
