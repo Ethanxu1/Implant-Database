@@ -30,7 +30,7 @@
     <div class="col-6 col-md-3">
         <div class="stat-card">
             <div class="stat-label">Units on Hand</div>
-            <div class="stat-value">{{ implants|sum(attribute='stock') }}</div>
+            <div class="stat-value" data-stat="units">{{ implants|sum(attribute='stock') }}</div>
         </div>
     </div>
     <div class="col-6 col-md-3">
@@ -103,11 +103,14 @@
                 </thead>
                 <tbody>
                     {% for implant in implants %}
-                    <tr class="{% if implant.is_low_stock() %}table-warning{% endif %}">
+                    <tr class="{% if implant.is_low_stock() %}table-warning{% endif %}"
+                        data-min-stock="{{ implant.min_stock }}"
+                        data-brand="{{ implant.brand }}"
+                        data-size="{{ implant.size }}">
                         <td>{{ implant.size }}</td>
                         <td>{{ implant.brand }}</td>
                         <td>
-                            <span class="badge {% if implant.stock > implant.min_stock %}bg-success{% else %}bg-danger{% endif %} fs-6">
+                            <span class="badge {% if implant.stock > implant.min_stock %}bg-success{% else %}bg-danger{% endif %} fs-6" data-stock>
                                 {{ implant.stock }}
                             </span>
                             {% if pending_counts.get(implant.id) %}
@@ -116,9 +119,9 @@
                         </td>
                         <td>
                             {% if implant.is_low_stock() %}
-                                <span class="badge bg-warning text-dark">Low Stock</span>
+                                <span class="badge bg-warning text-dark" data-status-badge>Low Stock</span>
                             {% else %}
-                                <span class="badge bg-success">Adequate</span>
+                                <span class="badge bg-success" data-status-badge>Adequate</span>
                             {% endif %}
                             {% if pending_counts.get(implant.id) %}
                                 <span class="badge bg-info ms-1">Pending Use</span>
@@ -126,10 +129,12 @@
                         </td>
                         <td>
                             <div class="btn-group btn-group-sm">
-                                <a href="{{ url_for('use_implant', implant_id=implant.id, search=search, size_filter=size_filter, brand_filter=brand_filter) }}"
-                                   class="btn btn-outline-primary" title="Use One">
-                                    <i class="fas fa-minus"></i>
-                                </a>
+                                <form method="POST" action="{{ url_for('use_implant', implant_id=implant.id, search=search, size_filter=size_filter, brand_filter=brand_filter) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-primary btn-sm" title="Use One"
+                                            data-action="use-implant">
+                                        <i class="fas fa-minus"></i>
+                                    </button>
+                                </form>
                                 <a href="{{ url_for('add_stock', implant_id=implant.id, search=search, size_filter=size_filter, brand_filter=brand_filter) }}"
                                    class="btn btn-outline-success" title="Add Stock">
                                     <i class="fas fa-plus"></i>

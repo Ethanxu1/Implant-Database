@@ -47,13 +47,12 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h6 class="card-title mb-0"><i class="fas fa-list-check me-2"></i>Selected Implants</h6>
-                <span class="badge bg-info">{{ procedure.items|length }}</span>
+                <span class="badge bg-info" data-selected-count>{{ procedure.items|length }}</span>
             </div>
             <div class="card-body p-0">
-                {% if procedure.items %}
-                <div class="procedure-items-list">
+                <div class="procedure-items-list" id="selected-items-list">
                     {% for item in procedure.items %}
-                    <div class="procedure-item-row">
+                    <div class="procedure-item-row" data-item-id="{{ item.id }}">
                         <div>
                             {% if item.implant %}
                             <div class="procedure-item-name">{{ item.implant.brand }} {{ item.implant.size }}</div>
@@ -64,7 +63,8 @@
                         </div>
                         <form method="POST"
                               action="{{ url_for('remove_procedure_implant', procedure_id=procedure.id, item_id=item.id) }}"
-                              class="d-inline">
+                              class="d-inline"
+                              data-action="remove-procedure-implant">
                             <input type="hidden" name="size_filter" value="{{ size_filter }}">
                             <input type="hidden" name="brand_filter" value="{{ brand_filter }}">
                             <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove">
@@ -74,13 +74,11 @@
                     </div>
                     {% endfor %}
                 </div>
-                {% else %}
-                <div class="text-center py-3 px-3">
+                <div class="text-center py-3 px-3" id="no-items-msg"{% if procedure.items %} style="display:none"{% endif %}>
                     <p class="text-muted mb-0" style="font-size:0.82rem">
                         No implants added yet.<br>Use the picker on the right.
                     </p>
                 </div>
-                {% endif %}
             </div>
         </div>
 
@@ -143,7 +141,11 @@
                                     <form method="POST"
                                           action="{{ url_for('add_procedure_implant', procedure_id=procedure.id) }}"
                                           class="d-flex gap-2 align-items-center"
-                                          id="addForm-{{ implant.id }}">
+                                          id="addForm-{{ implant.id }}"
+                                          data-action="add-procedure-implant"
+                                          data-brand="{{ implant.brand }}"
+                                          data-size="{{ implant.size }}"
+                                          data-procedure-id="{{ procedure.id }}">
                                         <input type="hidden" name="implant_id" value="{{ implant.id }}">
                                         <input type="hidden" name="size_filter" value="{{ size_filter }}">
                                         <input type="hidden" name="brand_filter" value="{{ brand_filter }}">
