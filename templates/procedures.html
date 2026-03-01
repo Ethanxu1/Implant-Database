@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Procedures — ImplantDB{% endblock %}
+
+{% block content %}
+
+<!-- Page Header -->
+<div class="page-header">
+    <div>
+        <div class="page-title">Scheduled Procedures</div>
+        <div class="page-sub">
+            {{ procedures|length }} pending procedure{{ 's' if procedures|length != 1 }}
+        </div>
+    </div>
+    <a href="{{ url_for('new_procedure') }}" class="btn btn-primary">
+        <i class="fas fa-plus me-1"></i>New Procedure
+    </a>
+</div>
+
+<!-- Undo Banner (shown only on the first page load after confirming) -->
+{% if undo_procedure %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+        <i class="fas fa-check-circle fa-lg flex-shrink-0"></i>
+        <div class="flex-grow-1">
+            <strong>Procedure confirmed</strong> —
+            implants for <strong>{{ undo_procedure.patient_name }}</strong> have been deducted from stock.
+        </div>
+        <form method="POST" action="{{ url_for('undo_procedure', procedure_id=undo_procedure.id) }}" class="d-inline flex-shrink-0">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-rotate-left me-1"></i>Undo
+            </button>
+        </form>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<!-- Procedures List -->
+{% if procedures %}
+<div class="procedure-list">
+    {% for proc in procedures %}
+    <div class="card procedure-card">
+        <div class="procedure-card-header">
+            <div class="procedure-patient">
+                <i class="fas fa-user me-2" style="color:var(--gold-dim)"></i>{{ proc.patient_name }}
+            </div>
+            <div class="procedure-meta">
+                {% if proc.date %}
+                    <span class="procedure-date">
+                        <i class="fas fa-calendar me-1"></i>{{ proc.date.strftime('%b %d, %Y') }}
+                    </span>
+                {% else %}
+                    <span class="procedure-date-tbd">Date TBD</span>
+                {% endif %}
+                <span class="badge bg-info">Pending</span>
+            </div>
+        </div>
+
+        <div class="procedure-implants">
+            {% if proc.items %}
+                {% for item in proc.items %}
+                <div class="procedure-implant-chip">
+                    {% if item.implant %}
+                    <span class="procedure-implant-name">{{ item.implant.brand }} {{ item.implant.size }}</span>
+                    {% else %}
+                    <span class="procedure-implant-name" style="color:var(--text-dim)">(removed)</span>
+                    {% endif %}
+                    <span class="procedure-implant-qty">×{{ item.quantity }}</span>
+                </div>
+                {% endfor %}
+            {% else %}
+                <span class="procedure-no-implants">No implants added yet</span>
+            {% endif %}
+        </div>
+
+        <div class="procedure-actions">
+            <form method="POST" action="{{ url_for('confirm_procedure', procedure_id=proc.id) }}" class="d-inline">
+                <button type="submit" class="btn btn-success btn-sm"
+                    {% if not proc.items %}disabled title="Add at least one implant before confirming"{% endif %}
+                    onclick="return confirm('Confirm procedure for {{ proc.patient_name }}?\nThis will deduct the selected implants from stock.')">
+                    <i class="fas fa-check me-1"></i>Confirm
+                </button>
+            </form>
+            <a href="{{ url_for('edit_procedure', procedure_id=proc.id) }}" class="btn btn-outline-info btn-sm">
+                <i class="fas fa-pen me-1"></i>Edit
+            </a>
+            <form method="POST" action="{{ url_for('cancel_procedure', procedure_id=proc.id) }}" class="d-inline ms-auto">
+                <button type="submit" class="btn btn-outline-danger btn-sm"
+                    onclick="return confirm('Cancel procedure for {{ proc.patient_name }}?')">
+                    <i class="fas fa-xmark me-1"></i>Cancel
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-calendar-xmark fa-3x mb-3" style="color:var(--border-strong)"></i>
+        <h5 class="mb-2">No scheduled procedures</h5>
+        <p class="text-muted mb-4">Create a procedure to reserve implants for an upcoming surgery</p>
+        <a href="{{ url_for('new_procedure') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>Create First Procedure
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

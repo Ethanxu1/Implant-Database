@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_login import (
     LoginManager,
     login_user,
@@ -6,8 +6,9 @@ from flask_login import (
     logout_user,
     current_user,
 )
-from database import db, Implant, User
+from database import db, Implant, User, Procedure, ProcedureImplant
 from werkzeug.middleware.proxy_fix import ProxyFix
+from datetime import datetime
 import os
 from dotenv import load_dotenv
 
@@ -102,6 +103,16 @@ def index():
     # Identify low stock items
     low_stock_items = [implant for implant in implants if implant.is_low_stock()]
 
+    # Compute pending quantities per implant (sum across all pending procedures)
+    pending_rows = (
+        db.session.query(ProcedureImplant.implant_id, db.func.sum(ProcedureImplant.quantity))
+        .join(Procedure)
+        .filter(Procedure.user_id == current_user.id, Procedure.status == 'pending')
+        .group_by(ProcedureImplant.implant_id)
+        .all()
+    )
+    pending_counts = {implant_id: total for implant_id, total in pending_rows}
+
     return render_template(
         "index.html",
         implants=implants,
@@ -112,6 +123,7 @@ def index():
         size_filter=size_filter,
         brand_filter=brand_filter,
         common_brands=COMMON_BRANDS,
+        pending_counts=pending_counts,
     )
 
 
@@ -360,11 +372,240 @@ def remove_implant(implant_id):
     implant = Implant.query.filter_by(
         id=implant_id, user_id=current_user.id
     ).first_or_404()
+
+    pending_ref = (ProcedureImplant.query
+                   .join(Procedure)
+                   .filter(Procedure.user_id == current_user.id,
+                           Procedure.status == 'pending',
+                           ProcedureImplant.implant_id == implant_id)
+                   .first())
+    if pending_ref:
+        flash(f"Cannot remove {implant.brand} {implant.size} — it is reserved in a pending procedure.", "warning")
+        return build_redirect_url("index")
+
     db.session.delete(implant)
     db.session.commit()
 
     flash("Implant removed successfully!", "success")
     return build_redirect_url("index")
+
+
+@app.route("/procedures")
+@login_required
+def procedures():
+    # Pop undo_id from session — only shows the undo banner on the first view
+    undo_id = session.pop('undo_id', None)
+    undo_procedure = None
+    if undo_id:
+        undo_procedure = Procedure.query.filter_by(
+            id=undo_id, user_id=current_user.id, status='completed'
+        ).first()
+
+    # Clean up any stale completed procedures (undo window has passed)
+    stale = Procedure.query.filter_by(user_id=current_user.id, status='completed').all()
+    deleted_any = False
+    for p in stale:
+        if p != undo_procedure:
+            db.session.delete(p)
+            deleted_any = True
+    if deleted_any:
+        db.session.commit()
+
+    pending = Procedure.query.filter_by(
+        user_id=current_user.id, status='pending'
+    ).order_by(Procedure.date.asc(), Procedure.patient_name.asc()).all()
+
+    return render_template("procedures.html", procedures=pending, undo_procedure=undo_procedure)
+
+
+@app.route("/procedures/new", methods=["GET", "POST"])
+@login_required
+def new_procedure():
+    if request.method == "POST":
+        patient_name = request.form["patient_name"].strip()
+        if not patient_name:
+            flash("Patient name is required.", "warning")
+            return render_template("procedure_new.html")
+
+        date_str = request.form.get("date", "").strip()
+        date_val = None
+        if date_str:
+            try:
+                date_val = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                flash("Invalid date format.", "warning")
+                return render_template("procedure_new.html")
+
+        procedure = Procedure(patient_name=patient_name, date=date_val, user_id=current_user.id)
+        db.session.add(procedure)
+        db.session.commit()
+        return redirect(url_for("edit_procedure", procedure_id=procedure.id))
+
+    return render_template("procedure_new.html")
+
+
+@app.route("/procedures/<int:procedure_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_procedure(procedure_id):
+    procedure = Procedure.query.filter_by(
+        id=procedure_id, user_id=current_user.id, status='pending'
+    ).first_or_404()
+
+    size_filter = request.args.get("size_filter", "")
+    brand_filter = request.args.get("brand_filter", "")
+
+    if request.method == "POST":
+        patient_name = request.form["patient_name"].strip()
+        if not patient_name:
+            flash("Patient name is required.", "warning")
+            return redirect(url_for("edit_procedure", procedure_id=procedure_id,
+                                    size_filter=size_filter, brand_filter=brand_filter))
+        procedure.patient_name = patient_name
+        date_str = request.form.get("date", "").strip()
+        procedure.date = None
+        if date_str:
+            try:
+                procedure.date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                flash("Invalid date format.", "warning")
+        db.session.commit()
+        flash("Procedure details saved.", "success")
+        return redirect(url_for("edit_procedure", procedure_id=procedure_id,
+                                size_filter=size_filter, brand_filter=brand_filter))
+
+    # Implant picker query
+    query = Implant.query.filter_by(user_id=current_user.id)
+    if size_filter:
+        query = query.filter(Implant.size.ilike(f"%{size_filter}%"))
+    if brand_filter:
+        query = query.filter(Implant.brand == brand_filter)
+    picker_implants = query.order_by(Implant.brand, Implant.size).all()
+
+    brands = [b[0] for b in db.session.query(Implant.brand)
+              .filter_by(user_id=current_user.id).distinct().all()]
+    brands.sort()
+
+    return render_template(
+        "procedure_edit.html",
+        procedure=procedure,
+        picker_implants=picker_implants,
+        brands=brands,
+        size_filter=size_filter,
+        brand_filter=brand_filter,
+    )
+
+
+@app.route("/procedures/<int:procedure_id>/add-implant", methods=["POST"])
+@login_required
+def add_procedure_implant(procedure_id):
+    procedure = Procedure.query.filter_by(
+        id=procedure_id, user_id=current_user.id, status='pending'
+    ).first_or_404()
+
+    implant_id = int(request.form["implant_id"])
+    quantity = max(1, int(request.form.get("quantity", 1)))
+    # Verify implant belongs to this user
+    Implant.query.filter_by(id=implant_id, user_id=current_user.id).first_or_404()
+
+    existing = ProcedureImplant.query.filter_by(
+        procedure_id=procedure_id, implant_id=implant_id
+    ).first()
+    if existing:
+        existing.quantity += quantity
+    else:
+        db.session.add(ProcedureImplant(
+            procedure_id=procedure_id, implant_id=implant_id, quantity=quantity
+        ))
+    db.session.commit()
+
+    size_filter = request.form.get("size_filter", "")
+    brand_filter = request.form.get("brand_filter", "")
+    return redirect(url_for("edit_procedure", procedure_id=procedure_id,
+                            size_filter=size_filter, brand_filter=brand_filter))
+
+
+@app.route("/procedures/<int:procedure_id>/remove-implant/<int:item_id>", methods=["POST"])
+@login_required
+def remove_procedure_implant(procedure_id, item_id):
+    Procedure.query.filter_by(
+        id=procedure_id, user_id=current_user.id, status='pending'
+    ).first_or_404()
+    item = ProcedureImplant.query.filter_by(
+        id=item_id, procedure_id=procedure_id
+    ).first_or_404()
+    db.session.delete(item)
+    db.session.commit()
+
+    size_filter = request.form.get("size_filter", "")
+    brand_filter = request.form.get("brand_filter", "")
+    return redirect(url_for("edit_procedure", procedure_id=procedure_id,
+                            size_filter=size_filter, brand_filter=brand_filter))
+
+
+@app.route("/procedures/<int:procedure_id>/confirm", methods=["POST"])
+@login_required
+def confirm_procedure(procedure_id):
+    procedure = Procedure.query.filter_by(
+        id=procedure_id, user_id=current_user.id, status='pending'
+    ).first_or_404()
+
+    if not procedure.items:
+        flash("Cannot confirm a procedure with no implants.", "warning")
+        return redirect(url_for("procedures"))
+
+    # Check all items have sufficient stock before making any changes
+    insufficient = []
+    for item in procedure.items:
+        implant = Implant.query.filter_by(id=item.implant_id, user_id=current_user.id).first()
+        if not implant or implant.stock < item.quantity:
+            name = f"{implant.brand} {implant.size}" if implant else f"(deleted implant)"
+            insufficient.append(f"{name} (need {item.quantity}, have {implant.stock if implant else 0})")
+    if insufficient:
+        flash(f"Insufficient stock: {', '.join(insufficient)}.", "warning")
+        return redirect(url_for("procedures"))
+
+    for item in procedure.items:
+        implant = Implant.query.filter_by(id=item.implant_id, user_id=current_user.id).first()
+        if implant:
+            implant.stock -= item.quantity
+
+    procedure.status = 'completed'
+    db.session.commit()
+
+    session['undo_id'] = procedure.id
+    flash(f"Procedure for {procedure.patient_name} confirmed — stock updated.", "success")
+    return redirect(url_for("procedures"))
+
+
+@app.route("/procedures/<int:procedure_id>/undo", methods=["POST"])
+@login_required
+def undo_procedure(procedure_id):
+    procedure = Procedure.query.filter_by(
+        id=procedure_id, user_id=current_user.id, status='completed'
+    ).first_or_404()
+
+    for item in procedure.items:
+        implant = Implant.query.filter_by(id=item.implant_id, user_id=current_user.id).first()
+        if implant:
+            implant.stock += item.quantity
+
+    procedure.status = 'pending'
+    db.session.commit()
+    flash(f"Procedure for {procedure.patient_name} has been restored to pending.", "info")
+    return redirect(url_for("procedures"))
+
+
+@app.route("/procedures/<int:procedure_id>/cancel", methods=["POST"])
+@login_required
+def cancel_procedure(procedure_id):
+    procedure = Procedure.query.filter_by(
+        id=procedure_id, user_id=current_user.id
+    ).first_or_404()
+    patient_name = procedure.patient_name
+    db.session.delete(procedure)
+    db.session.commit()
+    flash(f"Procedure for {patient_name} has been cancelled.", "info")
+    return redirect(url_for("procedures"))
 
 
 @app.route("/update_min_stock/<int:implant_id>", methods=["POST"])
@@ -383,15 +624,15 @@ def update_min_stock(implant_id):
     return build_redirect_url("index")
 
 
-def create_default_user():
-    """Create a default user if none exists"""
-    with app.app_context():
-        if not User.query.first():
-            user = User(username="user")
-            user.set_password("password123")
-            db.session.add(user)
-            db.session.commit()
-            print("Default user created: username='user', password='password123'")
+# def create_default_user():
+#     """Create a default user if none exists"""
+#     with app.app_context():
+#         if not User.query.first():
+#             user = User(username="user")
+#             user.set_password("password123")
+#             db.session.add(user)
+#             db.session.commit()
+#             print("Default user created: username='user', password='password123'")
 
 
 def init_db():
@@ -399,7 +640,7 @@ def init_db():
     with app.app_context():
         db.drop_all()
         db.create_all()
-        create_default_user()
+        # create_default_user()
         print("Database initialized!")
 
 
@@ -409,5 +650,5 @@ if __name__ == "__main__":
 
     with app.app_context():
         db.create_all()
-        create_default_user()
+        # create_default_user()
     app.run(debug=False)
