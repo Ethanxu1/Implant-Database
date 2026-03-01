@@ -486,6 +486,125 @@ tr.table-warning:hover > th {
 .text-warning { color: var(--warn-col) !important; }
 .border-top { border-color: var(--border) !important; }
 
+/* ── Procedure Cards (list page) ── */
+.procedure-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Extends .card — only unique override is overflow:hidden for the chip area */
+.procedure-card {
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+.procedure-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.9rem 1.25rem;
+  background: rgba(196, 162, 78, 0.04);
+  border-bottom: 1px solid var(--border);
+}
+
+.procedure-patient {
+  font-family: 'Lora', serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-head);
+}
+
+.procedure-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.procedure-date {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.procedure-date-tbd {
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--text-dim);
+}
+
+.procedure-implants {
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-height: 3.25rem;
+  align-items: center;
+}
+
+.procedure-implant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: rgba(196, 162, 78, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.2rem 0.6rem;
+}
+
+.procedure-implant-name {
+  font-size: 0.81rem;
+  color: var(--text-head);
+}
+
+.procedure-implant-qty {
+  font-size: 0.75rem;
+  color: var(--gold-dim);
+  font-weight: 600;
+}
+
+.procedure-no-implants {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.procedure-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.25rem;
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Procedure edit page — selected items sidebar */
+.procedure-items-list { padding: 0.25rem 0; }
+
+.procedure-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.procedure-item-row:last-child { border-bottom: none; }
+
+.procedure-item-name {
+  font-size: 0.84rem;
+  color: var(--text-head);
+}
+
+.procedure-item-qty {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 0.1rem;
+}
+
+/* Picker quantity input */
+.picker-qty { padding: 0.28rem 0.5rem; }
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .btn-group {

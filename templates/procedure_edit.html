@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Procedure — ImplantDB{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <div class="page-title">Edit Procedure</div>
+        <div class="page-sub">{{ procedure.patient_name }}</div>
+    </div>
+    <a href="{{ url_for('procedures') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>Back
+    </a>
+</div>
+
+<div class="row g-4">
+
+    <!-- Left column: procedure details + selected implants -->
+    <div class="col-lg-4">
+
+        <!-- Details card -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title"><i class="fas fa-user-doctor me-2"></i>Procedure Details</h6>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('edit_procedure', procedure_id=procedure.id, size_filter=size_filter, brand_filter=brand_filter) }}">
+                    <div class="mb-3">
+                        <label class="form-label">Patient Name *</label>
+                        <input type="text" class="form-control" name="patient_name"
+                               value="{{ procedure.patient_name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Surgery Date <span class="text-muted">(optional)</span></label>
+                        <input type="date" class="form-control" name="date"
+                               value="{{ procedure.date.strftime('%Y-%m-%d') if procedure.date else '' }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-save me-1"></i>Save Details
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Selected implants card -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="card-title mb-0"><i class="fas fa-list-check me-2"></i>Selected Implants</h6>
+                <span class="badge bg-info">{{ procedure.items|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                {% if procedure.items %}
+                <div class="procedure-items-list">
+                    {% for item in procedure.items %}
+                    <div class="procedure-item-row">
+                        <div>
+                            {% if item.implant %}
+                            <div class="procedure-item-name">{{ item.implant.brand }} {{ item.implant.size }}</div>
+                            {% else %}
+                            <div class="procedure-item-name" style="color:var(--text-dim)">(removed implant)</div>
+                            {% endif %}
+                            <div class="procedure-item-qty">Qty: {{ item.quantity }}</div>
+                        </div>
+                        <form method="POST"
+                              action="{{ url_for('remove_procedure_implant', procedure_id=procedure.id, item_id=item.id) }}"
+                              class="d-inline">
+                            <input type="hidden" name="size_filter" value="{{ size_filter }}">
+                            <input type="hidden" name="brand_filter" value="{{ brand_filter }}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove">
+                                <i class="fas fa-xmark"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-3 px-3">
+                    <p class="text-muted mb-0" style="font-size:0.82rem">
+                        No implants added yet.<br>Use the picker on the right.
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Right column: implant picker -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title"><i class="fas fa-magnifying-glass me-2"></i>Add Implants to Procedure</h6>
+            </div>
+            <div class="card-body">
+                <form method="GET" id="pickerFilter"
+                      action="{{ url_for('edit_procedure', procedure_id=procedure.id) }}"
+                      class="row g-2 align-items-end mb-0">
+                    <div class="col-md-4">
+                        <label class="form-label">Size</label>
+                        <input type="text" class="form-control" name="size_filter"
+                               placeholder="e.g., 4.1" value="{{ size_filter }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Brand</label>
+                        <select class="form-select" name="brand_filter">
+                            <option value="">All brands</option>
+                            {% for brand in brands %}
+                            <option value="{{ brand }}" {% if brand_filter == brand %}selected{% endif %}>{{ brand }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary flex-grow-1">Filter</button>
+                        <a href="{{ url_for('edit_procedure', procedure_id=procedure.id) }}" class="btn btn-outline-secondary">Clear</a>
+                    </div>
+                </form>
+            </div>
+            <div class="border-top" style="margin:0 1.5rem"></div>
+            <div class="card-body p-0">
+                {% if picker_implants %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Size</th>
+                                <th>Brand</th>
+                                <th>Stock</th>
+                                <th colspan="2">Add</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for implant in picker_implants %}
+                            <tr class="{% if implant.is_low_stock() %}table-warning{% endif %}">
+                                <td>{{ implant.size }}</td>
+                                <td>{{ implant.brand }}</td>
+                                <td>
+                                    <span class="badge {% if implant.stock > implant.min_stock %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ implant.stock }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <form method="POST"
+                                          action="{{ url_for('add_procedure_implant', procedure_id=procedure.id) }}"
+                                          class="d-flex gap-2 align-items-center"
+                                          id="addForm-{{ implant.id }}">
+                                        <input type="hidden" name="implant_id" value="{{ implant.id }}">
+                                        <input type="hidden" name="size_filter" value="{{ size_filter }}">
+                                        <input type="hidden" name="brand_filter" value="{{ brand_filter }}">
+                                        <input type="number" class="form-control form-control-sm picker-qty"
+                                               name="quantity" value="1" min="1"
+                                               style="width:70px">
+                                        <button type="submit" class="btn btn-outline-success btn-sm">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 px-3">
+                    <p class="text-muted mb-0">No implants match the current filter.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('#pickerFilter input').forEach(function(input) {
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); document.getElementById('pickerFilter').submit(); }
+        });
+    });
+});
+</script>
+{% endblock %}

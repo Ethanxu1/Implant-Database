@@ -110,12 +110,18 @@
                             <span class="badge {% if implant.stock > implant.min_stock %}bg-success{% else %}bg-danger{% endif %} fs-6">
                                 {{ implant.stock }}
                             </span>
+                            {% if pending_counts.get(implant.id) %}
+                            <span class="badge bg-info ms-1">{{ pending_counts[implant.id] }} pending</span>
+                            {% endif %}
                         </td>
                         <td>
                             {% if implant.is_low_stock() %}
                                 <span class="badge bg-warning text-dark">Low Stock</span>
                             {% else %}
                                 <span class="badge bg-success">Adequate</span>
+                            {% endif %}
+                            {% if pending_counts.get(implant.id) %}
+                                <span class="badge bg-info ms-1">Pending Use</span>
                             {% endif %}
                         </td>
                         <td>
