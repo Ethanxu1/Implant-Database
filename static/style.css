@@ -169,18 +169,6 @@ hr { border-color: var(--border); opacity: 1; }
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 1.1rem 1.25rem;
-  position: relative;
-  overflow: hidden;
-}
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 1.25rem; right: 1.25rem;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(196,162,78,0.45), transparent);
-}
-.stat-card.warn::before {
-  background: linear-gradient(90deg, transparent, rgba(220,130,60,0.55), transparent);
 }
 .stat-label {
   font-family: 'DM Sans', sans-serif;
