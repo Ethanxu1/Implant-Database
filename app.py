@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import (
     LoginManager,
     login_user,
@@ -45,6 +45,11 @@ def get_filter_params():
         "size_filter": request.args.get("size_filter", ""),
         "brand_filter": request.args.get("brand_filter", ""),
     }
+
+
+def is_ajax():
+    """Returns True when the request comes from our fetch() calls."""
+    return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
 
 def build_redirect_url(endpoint, **extra_params):
@@ -319,7 +324,7 @@ def edit_implant(implant_id):
     )
 
 
-@app.route("/use/<int:implant_id>")
+@app.route("/use/<int:implant_id>", methods=["POST"])
 @login_required
 def use_implant(implant_id):
     # Only allow using implants that belong to the current user
@@ -330,11 +335,16 @@ def use_implant(implant_id):
     if implant.stock > 0:
         implant.stock -= 1
         db.session.commit()
+        if is_ajax():
+            return jsonify({"ok": True, "new_stock": implant.stock,
+                            "message": f"Used one {implant.brand} {implant.size}. Remaining: {implant.stock}"})
         flash(
             f"Used one {implant.brand} {implant.size} implant. Remaining: {implant.stock}",
             "info",
         )
     else:
+        if is_ajax():
+            return jsonify({"ok": False, "message": "Cannot use implant — stock is already zero!"})
         flash("Cannot use implant - stock is already zero!", "warning")
 
     return build_redirect_url("index")
@@ -510,13 +520,22 @@ def add_procedure_implant(procedure_id):
     existing = ProcedureImplant.query.filter_by(
         procedure_id=procedure_id, implant_id=implant_id
     ).first()
+    is_existing = existing is not None
     if existing:
         existing.quantity += quantity
+        item = existing
     else:
-        db.session.add(ProcedureImplant(
+        item = ProcedureImplant(
             procedure_id=procedure_id, implant_id=implant_id, quantity=quantity
-        ))
+        )
+        db.session.add(item)
     db.session.commit()
+
+    if is_ajax():
+        implant = Implant.query.filter_by(id=implant_id, user_id=current_user.id).first()
+        return jsonify({"ok": True, "item_id": item.id, "quantity": item.quantity,
+                        "brand": implant.brand, "size": implant.size,
+                        "is_existing": is_existing})
 
     size_filter = request.form.get("size_filter", "")
     brand_filter = request.form.get("brand_filter", "")
@@ -536,6 +555,9 @@ def remove_procedure_implant(procedure_id, item_id):
     db.session.delete(item)
     db.session.commit()
 
+    if is_ajax():
+        return jsonify({"ok": True})
+
     size_filter = request.form.get("size_filter", "")
     brand_filter = request.form.get("brand_filter", "")
     return redirect(url_for("edit_procedure", procedure_id=procedure_id,
@@ -550,6 +572,8 @@ def confirm_procedure(procedure_id):
     ).first_or_404()
 
     if not procedure.items:
+        if is_ajax():
+            return jsonify({"ok": False, "message": "Cannot confirm a procedure with no implants."})
         flash("Cannot confirm a procedure with no implants.", "warning")
         return redirect(url_for("procedures"))
 
@@ -561,7 +585,10 @@ def confirm_procedure(procedure_id):
             name = f"{implant.brand} {implant.size}" if implant else f"(deleted implant)"
             insufficient.append(f"{name} (need {item.quantity}, have {implant.stock if implant else 0})")
     if insufficient:
-        flash(f"Insufficient stock: {', '.join(insufficient)}.", "warning")
+        msg = f"Insufficient stock: {', '.join(insufficient)}."
+        if is_ajax():
+            return jsonify({"ok": False, "message": msg})
+        flash(msg, "warning")
         return redirect(url_for("procedures"))
 
     for item in procedure.items:
@@ -571,6 +598,10 @@ def confirm_procedure(procedure_id):
 
     procedure.status = 'completed'
     db.session.commit()
+
+    if is_ajax():
+        return jsonify({"ok": True, "procedure_id": procedure.id,
+                        "message": f"Procedure for {procedure.patient_name} confirmed — stock updated."})
 
     session['undo_id'] = procedure.id
     flash(f"Procedure for {procedure.patient_name} confirmed — stock updated.", "success")
@@ -591,6 +622,10 @@ def undo_procedure(procedure_id):
 
     procedure.status = 'pending'
     db.session.commit()
+
+    if is_ajax():
+        return jsonify({"ok": True})
+
     flash(f"Procedure for {procedure.patient_name} has been restored to pending.", "info")
     return redirect(url_for("procedures"))
 
@@ -604,6 +639,10 @@ def cancel_procedure(procedure_id):
     patient_name = procedure.patient_name
     db.session.delete(procedure)
     db.session.commit()
+
+    if is_ajax():
+        return jsonify({"ok": True, "message": f"Procedure for {patient_name} has been cancelled."})
+
     flash(f"Procedure for {patient_name} has been cancelled.", "info")
     return redirect(url_for("procedures"))
 

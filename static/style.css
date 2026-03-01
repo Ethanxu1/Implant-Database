@@ -605,6 +605,87 @@ tr.table-warning:hover > th {
 /* Picker quantity input */
 .picker-qty { padding: 0.28rem 0.5rem; }
 
+/* ── Toast Notifications ── */
+#toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1090;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 380px;
+  pointer-events: none;
+}
+
+.app-toast {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 0.7rem 0.9rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: all;
+}
+
+.app-toast.app-toast-hide {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.app-toast-success { border-left-color: var(--ok); }
+.app-toast-warning { border-left-color: var(--warn-col); }
+.app-toast-danger  { border-left-color: var(--danger-col); }
+.app-toast-info    { border-left-color: var(--info-col); }
+
+.app-toast-body {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.84rem;
+}
+
+.app-toast-icon { flex-shrink: 0; }
+.app-toast-success .app-toast-icon { color: var(--ok); }
+.app-toast-warning .app-toast-icon { color: var(--warn-col); }
+.app-toast-danger  .app-toast-icon { color: var(--danger-col); }
+.app-toast-info    .app-toast-icon { color: var(--info-col); }
+
+.app-toast-message {
+  color: var(--text);
+  flex-grow: 1;
+  line-height: 1.4;
+}
+
+.app-toast-undo {
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.55rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: 'DM Sans', sans-serif;
+}
+.app-toast-undo:hover { border-color: var(--gold); color: var(--gold); }
+
+.app-toast-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+.app-toast-close:hover { color: var(--text); }
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .btn-group {

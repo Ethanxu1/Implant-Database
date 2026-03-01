@@ -75,19 +75,22 @@
         </div>
 
         <div class="procedure-actions">
-            <form method="POST" action="{{ url_for('confirm_procedure', procedure_id=proc.id) }}" class="d-inline">
+            <form method="POST" action="{{ url_for('confirm_procedure', procedure_id=proc.id) }}" class="d-inline"
+                  data-action="confirm-procedure"
+                  data-patient-name="{{ proc.patient_name }}"
+                  data-procedure-id="{{ proc.id }}">
                 <button type="submit" class="btn btn-success btn-sm"
-                    {% if not proc.items %}disabled title="Add at least one implant before confirming"{% endif %}
-                    onclick="return confirm('Confirm procedure for {{ proc.patient_name }}?\nThis will deduct the selected implants from stock.')">
+                    {% if not proc.items %}disabled title="Add at least one implant before confirming"{% endif %}>
                     <i class="fas fa-check me-1"></i>Confirm
                 </button>
             </form>
             <a href="{{ url_for('edit_procedure', procedure_id=proc.id) }}" class="btn btn-outline-info btn-sm">
                 <i class="fas fa-pen me-1"></i>Edit
             </a>
-            <form method="POST" action="{{ url_for('cancel_procedure', procedure_id=proc.id) }}" class="d-inline ms-auto">
-                <button type="submit" class="btn btn-outline-danger btn-sm"
-                    onclick="return confirm('Cancel procedure for {{ proc.patient_name }}?')">
+            <form method="POST" action="{{ url_for('cancel_procedure', procedure_id=proc.id) }}" class="d-inline ms-auto"
+                  data-action="cancel-procedure"
+                  data-patient-name="{{ proc.patient_name }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm">
                     <i class="fas fa-xmark me-1"></i>Cancel
                 </button>
             </form>
