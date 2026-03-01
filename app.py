@@ -514,12 +514,25 @@ def add_procedure_implant(procedure_id):
 
     implant_id = int(request.form["implant_id"])
     quantity = max(1, int(request.form.get("quantity", 1)))
-    # Verify implant belongs to this user
-    Implant.query.filter_by(id=implant_id, user_id=current_user.id).first_or_404()
+    implant = Implant.query.filter_by(id=implant_id, user_id=current_user.id).first_or_404()
 
     existing = ProcedureImplant.query.filter_by(
         procedure_id=procedure_id, implant_id=implant_id
     ).first()
+    current_qty = existing.quantity if existing else 0
+
+    if current_qty + quantity > implant.stock:
+        available = implant.stock - current_qty
+        msg = (f"Only {implant.stock} in stock"
+               + (f" ({available} available for this procedure)" if current_qty else "") + ".")
+        if is_ajax():
+            return jsonify({"ok": False, "message": msg})
+        size_filter = request.form.get("size_filter", "")
+        brand_filter = request.form.get("brand_filter", "")
+        flash(msg, "warning")
+        return redirect(url_for("edit_procedure", procedure_id=procedure_id,
+                                size_filter=size_filter, brand_filter=brand_filter))
+
     is_existing = existing is not None
     if existing:
         existing.quantity += quantity
@@ -532,15 +545,41 @@ def add_procedure_implant(procedure_id):
     db.session.commit()
 
     if is_ajax():
-        implant = Implant.query.filter_by(id=implant_id, user_id=current_user.id).first()
         return jsonify({"ok": True, "item_id": item.id, "quantity": item.quantity,
                         "brand": implant.brand, "size": implant.size,
-                        "is_existing": is_existing})
+                        "is_existing": is_existing, "stock": implant.stock})
 
     size_filter = request.form.get("size_filter", "")
     brand_filter = request.form.get("brand_filter", "")
     return redirect(url_for("edit_procedure", procedure_id=procedure_id,
                             size_filter=size_filter, brand_filter=brand_filter))
+
+
+@app.route("/procedures/<int:procedure_id>/item/<int:item_id>/set-quantity", methods=["POST"])
+@login_required
+def set_procedure_item_quantity(procedure_id, item_id):
+    Procedure.query.filter_by(
+        id=procedure_id, user_id=current_user.id, status='pending'
+    ).first_or_404()
+    item = ProcedureImplant.query.filter_by(
+        id=item_id, procedure_id=procedure_id
+    ).first_or_404()
+
+    quantity = int(request.form.get("quantity", 1))
+
+    if quantity <= 0:
+        db.session.delete(item)
+        db.session.commit()
+        return jsonify({"ok": True, "removed": True})
+
+    implant = Implant.query.filter_by(id=item.implant_id, user_id=current_user.id).first()
+    if implant and quantity > implant.stock:
+        return jsonify({"ok": False,
+                        "message": f"Only {implant.stock} in stock — cannot set quantity to {quantity}."})
+
+    item.quantity = quantity
+    db.session.commit()
+    return jsonify({"ok": True, "removed": False, "quantity": item.quantity})
 
 
 @app.route("/procedures/<int:procedure_id>/remove-implant/<int:item_id>", methods=["POST"])

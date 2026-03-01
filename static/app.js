@@ -179,7 +179,7 @@ document.addEventListener('submit', function (e) {
           // Quantity merged into an existing item — update its display, remove placeholder
           var existingRow = list.querySelector('[data-item-id="' + data.item_id + '"]');
           if (existingRow) {
-            existingRow.querySelector('.procedure-item-qty').textContent = 'Qty: ' + data.quantity;
+            existingRow.querySelector('.procedure-item-qty-val').textContent = data.quantity;
           }
           var placeholder = document.getElementById(tempId);
           if (placeholder) placeholder.remove();
@@ -188,24 +188,38 @@ document.addEventListener('submit', function (e) {
           // New item confirmed — replace placeholder with interactive row and bump count
           var sizeFilter  = formData.get('size_filter') || '';
           var brandFilter = formData.get('brand_filter') || '';
+          var setQtyUrl   = '/procedures/' + procedureId + '/item/' + data.item_id + '/set-quantity';
           var removeUrl   = '/procedures/' + procedureId + '/remove-implant/' + data.item_id;
 
+          var atCeiling = data.quantity >= data.stock;
           var realRow = document.createElement('div');
           realRow.className = 'procedure-item-row';
           realRow.dataset.itemId = data.item_id;
+          realRow.dataset.stock  = data.stock;
           realRow.innerHTML =
-            '<div>' +
-              '<div class="procedure-item-name">' + data.brand + ' ' + data.size + '</div>' +
-              '<div class="procedure-item-qty">Qty: ' + data.quantity + '</div>' +
-            '</div>' +
-            '<form method="POST" action="' + removeUrl + '" class="d-inline"' +
-                ' data-action="remove-procedure-implant">' +
-              '<input type="hidden" name="size_filter" value="' + sizeFilter + '">' +
-              '<input type="hidden" name="brand_filter" value="' + brandFilter + '">' +
-              '<button type="submit" class="btn btn-outline-danger btn-sm" title="Remove">' +
-                '<i class="fas fa-xmark"></i>' +
+            '<div class="procedure-item-name">' + data.brand + ' ' + data.size + '</div>' +
+            '<div class="procedure-item-controls">' +
+              '<button type="button" class="btn btn-outline-secondary btn-sm procedure-qty-btn"' +
+                  ' title="Decrease" data-action="adjust-item-qty" data-delta="-1"' +
+                  ' data-item-id="' + data.item_id + '" data-set-url="' + setQtyUrl + '">' +
+                '<i class="fas fa-minus"></i>' +
               '</button>' +
-            '</form>';
+              '<span class="procedure-item-qty-val">' + data.quantity + '</span>' +
+              '<button type="button" class="btn btn-outline-secondary btn-sm procedure-qty-btn"' +
+                  ' title="Increase" data-action="adjust-item-qty" data-delta="1"' +
+                  ' data-item-id="' + data.item_id + '" data-set-url="' + setQtyUrl + '"' +
+                  (atCeiling ? ' disabled' : '') + '>' +
+                '<i class="fas fa-plus"></i>' +
+              '</button>' +
+              '<form method="POST" action="' + removeUrl + '" class="d-inline"' +
+                  ' data-action="remove-procedure-implant">' +
+                '<input type="hidden" name="size_filter" value="' + sizeFilter + '">' +
+                '<input type="hidden" name="brand_filter" value="' + brandFilter + '">' +
+                '<button type="submit" class="btn btn-outline-danger btn-sm" title="Remove">' +
+                  '<i class="fas fa-xmark"></i>' +
+                '</button>' +
+              '</form>' +
+            '</div>';
 
           var placeholder = document.getElementById(tempId);
           if (placeholder) placeholder.replaceWith(realRow);
@@ -226,7 +240,82 @@ document.addEventListener('submit', function (e) {
     });
 });
 
-// ── 3. Remove Implant from Procedure ─────────────────────────────────────────
+// ── 3. Adjust Implant Quantity in Procedure (+1 / −1) ────────────────────────
+
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest('[data-action="adjust-item-qty"]');
+  if (!btn) return;
+
+  if (btn.classList.contains('is-loading')) return;
+
+  var delta      = parseInt(btn.dataset.delta, 10);
+  var url        = btn.dataset.setUrl;
+  var row        = btn.closest('.procedure-item-row');
+  var qtyEl      = row.querySelector('.procedure-item-qty-val');
+  var stock      = parseInt(row.dataset.stock, 10);
+  var countBadge = document.querySelector('[data-selected-count]');
+  var emptyMsg   = document.getElementById('no-items-msg');
+  var list       = document.getElementById('selected-items-list');
+
+  var oldQty = parseInt(qtyEl.textContent, 10);
+  var newQty = oldQty + delta;
+
+  // Block + when already at stock ceiling
+  if (delta > 0 && oldQty >= stock) {
+    showToast('Cannot exceed available stock (' + stock + ').', 'warning');
+    return;
+  }
+
+  // Optimistic update
+  btn.classList.add('is-loading');
+  if (newQty <= 0) {
+    // Will remove the row — save HTML for potential revert
+    var rowHTML  = row.outerHTML;
+    var parent   = row.parentNode;
+    var nextSib  = row.nextSibling;
+    row.remove();
+    if (countBadge) countBadge.textContent = Math.max(0, parseInt(countBadge.textContent, 10) - 1);
+    if (emptyMsg && list.children.length === 0) emptyMsg.style.display = '';
+
+    var formData = new FormData();
+    formData.append('quantity', 0);
+    fetchAction(url, { method: 'POST', body: formData })
+      .then(function (data) {
+        if (!data.ok) {
+          revertRemove(parent, nextSib, rowHTML, countBadge, emptyMsg);
+          showToast(data.message || 'Failed to update quantity.', 'danger');
+        }
+      })
+      .catch(function () {
+        revertRemove(parent, nextSib, rowHTML, countBadge, emptyMsg);
+        showToast('Action failed — please try again.', 'danger');
+      });
+  } else {
+    qtyEl.textContent = newQty;
+    var plusBtn = row.querySelector('[data-delta="1"]');
+    if (plusBtn) plusBtn.disabled = (newQty >= stock);
+
+    var formData = new FormData();
+    formData.append('quantity', newQty);
+    fetchAction(url, { method: 'POST', body: formData })
+      .then(function (data) {
+        btn.classList.remove('is-loading');
+        if (!data.ok) {
+          qtyEl.textContent = oldQty;
+          if (plusBtn) plusBtn.disabled = (oldQty >= stock);
+          showToast(data.message || 'Failed to update quantity.', 'danger');
+        }
+      })
+      .catch(function () {
+        btn.classList.remove('is-loading');
+        qtyEl.textContent = oldQty;
+        if (plusBtn) plusBtn.disabled = (oldQty >= stock);
+        showToast('Action failed — please try again.', 'danger');
+      });
+  }
+});
+
+// ── 4. Remove Implant from Procedure ─────────────────────────────────────────
 
 document.addEventListener('submit', function (e) {
   var form = e.target.closest('[data-action="remove-procedure-implant"]');
