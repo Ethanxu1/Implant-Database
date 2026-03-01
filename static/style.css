@@ -21,12 +21,15 @@
   --ok:             #52C896;
   --ok-bg:          rgba(50, 180, 120, 0.10);
   --ok-border:      rgba(50, 180, 120, 0.24);
-  --warn-col:       #E08060;
-  --warn-bg:        rgba(200, 90, 60, 0.08);
-  --warn-border:    rgba(200, 90, 60, 0.28);
+  --warn-col:       #C8A040;
+  --warn-bg:        rgba(185, 148, 30, 0.10);
+  --warn-border:    rgba(185, 148, 30, 0.30);
   --danger-col:     #C86050;
   --danger-bg:      rgba(200, 80, 50, 0.08);
   --danger-border:  rgba(200, 80, 50, 0.28);
+  --crit-col:       #D06050;
+  --crit-bg:        rgba(200, 70, 50, 0.12);
+  --crit-border:    rgba(200, 70, 50, 0.32);
   --info-col:       #7AB0D4;
   --info-bg:        rgba(80, 140, 200, 0.08);
   --info-border:    rgba(80, 140, 200, 0.24);
@@ -229,24 +232,40 @@ hr { border-color: var(--border); opacity: 1; }
 }
 .table > tbody > tr:last-child > td { border-bottom: none; }
 
-/* Low-stock rows: tr.table-warning has higher specificity (0,1,1) than
-   Bootstrap's .table-warning (0,1,0) so this custom property wins, then
-   the explicit td rule acts as a guaranteed fallback with !important. */
+/* Low-stock rows (amber) — tr specificity (0,1,1) beats Bootstrap's (0,1,0) */
 tr.table-warning {
-  --bs-table-bg: rgba(200, 90, 60, 0.09);
+  --bs-table-bg: rgba(185, 148, 30, 0.08);
   --bs-table-color: var(--text);
-  --bs-table-striped-bg: rgba(200, 90, 60, 0.13);
-  --bs-table-hover-bg: rgba(200, 90, 60, 0.16);
-  --bs-table-border-color: rgba(200, 90, 60, 0.14);
+  --bs-table-striped-bg: rgba(185, 148, 30, 0.12);
+  --bs-table-hover-bg: rgba(185, 148, 30, 0.15);
+  --bs-table-border-color: rgba(185, 148, 30, 0.14);
 }
 tr.table-warning > td,
 tr.table-warning > th {
-  background-color: rgba(200, 90, 60, 0.09) !important;
+  background-color: rgba(185, 148, 30, 0.08) !important;
   color: var(--text) !important;
 }
 tr.table-warning:hover > td,
 tr.table-warning:hover > th {
-  background-color: rgba(200, 90, 60, 0.16) !important;
+  background-color: rgba(185, 148, 30, 0.15) !important;
+}
+
+/* Out-of-stock rows (red) */
+tr.table-out-of-stock {
+  --bs-table-bg: var(--crit-bg);
+  --bs-table-color: var(--text);
+  --bs-table-striped-bg: rgba(200, 70, 50, 0.16);
+  --bs-table-hover-bg: rgba(200, 70, 50, 0.19);
+  --bs-table-border-color: rgba(200, 70, 50, 0.16);
+}
+tr.table-out-of-stock > td,
+tr.table-out-of-stock > th {
+  background-color: var(--crit-bg) !important;
+  color: var(--text) !important;
+}
+tr.table-out-of-stock:hover > td,
+tr.table-out-of-stock:hover > th {
+  background-color: rgba(200, 70, 50, 0.19) !important;
 }
 
 /* ── Forms ── */
@@ -450,6 +469,11 @@ tr.table-warning:hover > th {
   background: var(--warn-bg) !important;
   color: var(--warn-col) !important;
   border: 1px solid var(--warn-border);
+}
+.badge.bg-out-of-stock {
+  background: var(--crit-bg) !important;
+  color: var(--crit-col) !important;
+  border: 1px solid var(--crit-border);
 }
 .badge.bg-warning {
   background: rgba(180, 120, 40, 0.12) !important;

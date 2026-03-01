@@ -77,16 +77,25 @@ function fetchAction(url, options) {
     });
 }
 
-// ── Helper: update stock badge, status badge, and row highlight ───────────────
+// ── Helper: compute stock state ('ok' | 'low' | 'empty') ─────────────────────
 
-function applyStockState(stockBadge, statusBadge, row, stock, isLow) {
+function stockState(stock, hasThreshold, minStock) {
+  if (stock === 0) return 'empty';
+  if (hasThreshold && stock <= minStock) return 'low';
+  return 'ok';
+}
+
+// ── Helper: update stock badge and row highlight ──────────────────────────────
+
+function applyStockState(stockBadge, row, stock, state) {
   stockBadge.textContent = stock;
-  stockBadge.className   = 'badge ' + (isLow ? 'bg-danger' : 'bg-success') + ' fs-6';
-  if (statusBadge) {
-    statusBadge.textContent = isLow ? 'Low Stock' : 'Adequate';
-    statusBadge.className   = 'badge ' + (isLow ? 'bg-warning text-dark' : 'bg-success');
-  }
-  row.className = isLow ? 'table-warning' : '';
+  var badgeClass = state === 'empty' ? 'bg-out-of-stock'
+                 : state === 'low'   ? 'bg-danger'
+                 :                     'bg-success';
+  stockBadge.className = 'badge ' + badgeClass + ' fs-6';
+  row.className = state === 'empty' ? 'table-out-of-stock'
+                : state === 'low'   ? 'table-warning'
+                :                     '';
 }
 
 // ── 1. Use Implant (inventory page) ──────────────────────────────────────────
@@ -101,7 +110,6 @@ document.addEventListener('click', function (e) {
 
   var row         = btn.closest('tr');
   var stockBadge  = row.querySelector('[data-stock]');
-  var statusBadge = row.querySelector('[data-status-badge]');
   var minStockRaw = row.dataset.minStock;
   var hasThreshold = minStockRaw !== '';
   var minStock    = hasThreshold ? parseInt(minStockRaw, 10) : NaN;
@@ -110,13 +118,13 @@ document.addEventListener('click', function (e) {
   var oldStock = parseInt(stockBadge.textContent, 10);
   if (oldStock <= 0) return;
 
-  var newStock = oldStock - 1;
-  var isLow    = hasThreshold && newStock <= minStock;
-  var wasLow   = hasThreshold && oldStock <= minStock;
+  var newStock  = oldStock - 1;
+  var newState  = stockState(newStock,  hasThreshold, minStock);
+  var oldState  = stockState(oldStock,  hasThreshold, minStock);
 
   // Optimistic update
   btn.classList.add('is-loading');
-  applyStockState(stockBadge, statusBadge, row, newStock, isLow);
+  applyStockState(stockBadge, row, newStock, newState);
   if (unitsCard) unitsCard.textContent = parseInt(unitsCard.textContent, 10) - 1;
 
   var url = btn.closest('form').action;
@@ -126,14 +134,14 @@ document.addEventListener('click', function (e) {
       if (data.ok) {
         showToast(data.message, 'info');
       } else {
-        applyStockState(stockBadge, statusBadge, row, oldStock, wasLow);
+        applyStockState(stockBadge, row, oldStock, oldState);
         if (unitsCard) unitsCard.textContent = parseInt(unitsCard.textContent, 10) + 1;
         showToast(data.message, 'warning');
       }
     })
     .catch(function () {
       btn.classList.remove('is-loading');
-      applyStockState(stockBadge, statusBadge, row, oldStock, wasLow);
+      applyStockState(stockBadge, row, oldStock, oldState);
       if (unitsCard) unitsCard.textContent = parseInt(unitsCard.textContent, 10) + 1;
       showToast('Action failed — please try again.', 'danger');
     });

@@ -102,14 +102,14 @@
                 </thead>
                 <tbody>
                     {% for implant in implants %}
-                    <tr class="{% if implant.is_low_stock() %}table-warning{% endif %}"
+                    <tr class="{% if implant.stock == 0 %}table-out-of-stock{% elif implant.is_low_stock() %}table-warning{% endif %}"
                         data-min-stock="{{ implant.min_stock if implant.min_stock is not none else '' }}"
                         data-brand="{{ implant.brand }}"
                         data-size="{{ implant.size }}">
                         <td>{{ implant.size }}</td>
                         <td>{{ implant.brand }}</td>
                         <td>
-                            <span class="badge {% if implant.is_low_stock() %}bg-danger{% else %}bg-success{% endif %} fs-6" data-stock>
+                            <span class="badge {% if implant.stock == 0 %}bg-out-of-stock{% elif implant.is_low_stock() %}bg-danger{% else %}bg-success{% endif %} fs-6" data-stock>
                                 {{ implant.stock }}
                             </span>
                             {% if pending_counts.get(implant.id) %}
