@@ -63,6 +63,11 @@
                 <div class="procedure-implant-chip">
                     {% if item.implant %}
                     <span class="procedure-implant-name">{{ item.implant.brand }} {{ item.implant.size }}</span>
+                    {% if item.implant_id in total_pending and total_pending[item.implant_id] > item.implant.stock %}
+                    <span class="text-warning" title="Combined pending demand ({{ total_pending[item.implant_id] }}) exceeds stock ({{ item.implant.stock }})">
+                        <i class="fas fa-triangle-exclamation"></i>
+                    </span>
+                    {% endif %}
                     {% else %}
                     <span class="procedure-implant-name" style="color:var(--text-dim)">(removed)</span>
                     {% endif %}
@@ -80,8 +85,13 @@
                   data-patient-name="{{ proc.patient_name }}"
                   data-procedure-id="{{ proc.id }}">
                 <button type="submit" class="btn btn-success btn-sm"
-                    {% if not proc.items %}disabled title="Add at least one implant before confirming"{% endif %}>
+                    {% if not proc.items %}
+                        disabled title="Add at least one implant before confirming"
+                    {% elif proc.id in over_stock_set %}
+                        disabled title="Insufficient stock — combined pending demand exceeds available stock"
+                    {% endif %}>
                     <i class="fas fa-check me-1"></i>Confirm
+                    {% if proc.id in over_stock_set %}<span class="ms-1"><i class="fas fa-triangle-exclamation"></i></span>{% endif %}
                 </button>
             </form>
             <a href="{{ url_for('edit_procedure', procedure_id=proc.id) }}" class="btn btn-outline-info btn-sm">

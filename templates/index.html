@@ -97,34 +97,23 @@
                         <th>Size</th>
                         <th>Brand</th>
                         <th>Stock</th>
-                        <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for implant in implants %}
-                    <tr class="{% if implant.is_low_stock() %}table-warning{% endif %}"
-                        data-min-stock="{{ implant.min_stock }}"
+                    <tr class="{% if implant.stock == 0 %}table-out-of-stock{% elif implant.is_low_stock() %}table-warning{% endif %}"
+                        data-min-stock="{{ implant.min_stock if implant.min_stock is not none else '' }}"
                         data-brand="{{ implant.brand }}"
                         data-size="{{ implant.size }}">
                         <td>{{ implant.size }}</td>
                         <td>{{ implant.brand }}</td>
                         <td>
-                            <span class="badge {% if implant.stock > implant.min_stock %}bg-success{% else %}bg-danger{% endif %} fs-6" data-stock>
+                            <span class="badge {% if implant.stock == 0 %}bg-out-of-stock{% elif implant.is_low_stock() %}bg-danger{% else %}bg-success{% endif %} fs-6" data-stock>
                                 {{ implant.stock }}
                             </span>
                             {% if pending_counts.get(implant.id) %}
                             <span class="badge bg-info ms-1">{{ pending_counts[implant.id] }} pending</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if implant.is_low_stock() %}
-                                <span class="badge bg-warning text-dark" data-status-badge>Low Stock</span>
-                            {% else %}
-                                <span class="badge bg-success" data-status-badge>Adequate</span>
-                            {% endif %}
-                            {% if pending_counts.get(implant.id) %}
-                                <span class="badge bg-info ms-1">Pending Use</span>
                             {% endif %}
                         </td>
                         <td>

@@ -1,4 +1,13 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    session,
+    jsonify,
+)
 from flask_login import (
     LoginManager,
     login_user,
@@ -6,6 +15,7 @@ from flask_login import (
     logout_user,
     current_user,
 )
+from flask_migrate import Migrate
 from database import db, Implant, User, Procedure, ProcedureImplant
 from werkzeug.middleware.proxy_fix import ProxyFix
 from datetime import datetime
@@ -21,6 +31,11 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 db.init_app(app)
+
+migrate = Migrate(app, db, render_as_batch=True)
+
+# with app.app_context():
+#     db.create_all()
 
 # Flask-Login setup
 login_manager = LoginManager()
@@ -49,7 +64,23 @@ def get_filter_params():
 
 def is_ajax():
     """Returns True when the request comes from our fetch() calls."""
-    return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+
+def other_pending_qty(implant_id, exclude_procedure_id):
+    """Sum of quantities for implant_id across all pending procedures except the given one."""
+    return (
+        db.session.query(db.func.sum(ProcedureImplant.quantity))
+        .join(Procedure)
+        .filter(
+            Procedure.user_id == current_user.id,
+            Procedure.status == "pending",
+            Procedure.id != exclude_procedure_id,
+            ProcedureImplant.implant_id == implant_id,
+        )
+        .scalar()
+        or 0
+    )
 
 
 def build_redirect_url(endpoint, **extra_params):
@@ -110,9 +141,11 @@ def index():
 
     # Compute pending quantities per implant (sum across all pending procedures)
     pending_rows = (
-        db.session.query(ProcedureImplant.implant_id, db.func.sum(ProcedureImplant.quantity))
+        db.session.query(
+            ProcedureImplant.implant_id, db.func.sum(ProcedureImplant.quantity)
+        )
         .join(Procedure)
-        .filter(Procedure.user_id == current_user.id, Procedure.status == 'pending')
+        .filter(Procedure.user_id == current_user.id, Procedure.status == "pending")
         .group_by(ProcedureImplant.implant_id)
         .all()
     )
@@ -248,7 +281,8 @@ def add_implant():
         size = request.form["size"]
         brand = request.form.get("custom_brand") or request.form["brand"]
         stock = int(request.form["stock"])
-        min_stock = int(request.form["min_stock"])
+        min_stock_val = request.form.get("min_stock", "").strip()
+        min_stock = int(min_stock_val) if min_stock_val else None
 
         # Check if implant already exists for this user
         existing_implant = Implant.query.filter_by(
@@ -293,7 +327,8 @@ def edit_implant(implant_id):
         implant.size = request.form["size"]
         implant.brand = request.form.get("custom_brand") or request.form["brand"]
         implant.stock = int(request.form["stock"])
-        implant.min_stock = int(request.form["min_stock"])
+        min_stock_val = request.form.get("min_stock", "").strip()
+        implant.min_stock = int(min_stock_val) if min_stock_val else None
 
         # Check if another implant already has this size and brand combination for this user
         existing_implant = Implant.query.filter(
@@ -336,15 +371,22 @@ def use_implant(implant_id):
         implant.stock -= 1
         db.session.commit()
         if is_ajax():
-            return jsonify({"ok": True, "new_stock": implant.stock,
-                            "message": f"Used one {implant.brand} {implant.size}. Remaining: {implant.stock}"})
+            return jsonify(
+                {
+                    "ok": True,
+                    "new_stock": implant.stock,
+                    "message": f"Used one {implant.brand} {implant.size}. Remaining: {implant.stock}",
+                }
+            )
         flash(
             f"Used one {implant.brand} {implant.size} implant. Remaining: {implant.stock}",
             "info",
         )
     else:
         if is_ajax():
-            return jsonify({"ok": False, "message": "Cannot use implant — stock is already zero!"})
+            return jsonify(
+                {"ok": False, "message": "Cannot use implant — stock is already zero!"}
+            )
         flash("Cannot use implant - stock is already zero!", "warning")
 
     return build_redirect_url("index")
@@ -383,14 +425,20 @@ def remove_implant(implant_id):
         id=implant_id, user_id=current_user.id
     ).first_or_404()
 
-    pending_ref = (ProcedureImplant.query
-                   .join(Procedure)
-                   .filter(Procedure.user_id == current_user.id,
-                           Procedure.status == 'pending',
-                           ProcedureImplant.implant_id == implant_id)
-                   .first())
+    pending_ref = (
+        ProcedureImplant.query.join(Procedure)
+        .filter(
+            Procedure.user_id == current_user.id,
+            Procedure.status == "pending",
+            ProcedureImplant.implant_id == implant_id,
+        )
+        .first()
+    )
     if pending_ref:
-        flash(f"Cannot remove {implant.brand} {implant.size} — it is reserved in a pending procedure.", "warning")
+        flash(
+            f"Cannot remove {implant.brand} {implant.size} — it is reserved in a pending procedure.",
+            "warning",
+        )
         return build_redirect_url("index")
 
     db.session.delete(implant)
@@ -404,15 +452,15 @@ def remove_implant(implant_id):
 @login_required
 def procedures():
     # Pop undo_id from session — only shows the undo banner on the first view
-    undo_id = session.pop('undo_id', None)
+    undo_id = session.pop("undo_id", None)
     undo_procedure = None
     if undo_id:
         undo_procedure = Procedure.query.filter_by(
-            id=undo_id, user_id=current_user.id, status='completed'
+            id=undo_id, user_id=current_user.id, status="completed"
         ).first()
 
     # Clean up any stale completed procedures (undo window has passed)
-    stale = Procedure.query.filter_by(user_id=current_user.id, status='completed').all()
+    stale = Procedure.query.filter_by(user_id=current_user.id, status="completed").all()
     deleted_any = False
     for p in stale:
         if p != undo_procedure:
@@ -421,11 +469,40 @@ def procedures():
     if deleted_any:
         db.session.commit()
 
-    pending = Procedure.query.filter_by(
-        user_id=current_user.id, status='pending'
-    ).order_by(Procedure.date.asc(), Procedure.patient_name.asc()).all()
+    pending = (
+        Procedure.query.filter_by(user_id=current_user.id, status="pending")
+        .order_by(Procedure.date.asc(), Procedure.patient_name.asc())
+        .all()
+    )
 
-    return render_template("procedures.html", procedures=pending, undo_procedure=undo_procedure)
+    all_pending_rows = (
+        db.session.query(
+            ProcedureImplant.implant_id, db.func.sum(ProcedureImplant.quantity)
+        )
+        .join(Procedure)
+        .filter(Procedure.user_id == current_user.id, Procedure.status == "pending")
+        .group_by(ProcedureImplant.implant_id)
+        .all()
+    )
+    total_pending = {implant_id: total for implant_id, total in all_pending_rows}
+
+    over_stock_set = set()
+    for proc in pending:
+        for item in proc.items:
+            if (
+                item.implant
+                and total_pending.get(item.implant_id, 0) > item.implant.stock
+            ):
+                over_stock_set.add(proc.id)
+                break
+
+    return render_template(
+        "procedures.html",
+        procedures=pending,
+        undo_procedure=undo_procedure,
+        over_stock_set=over_stock_set,
+        total_pending=total_pending,
+    )
 
 
 @app.route("/procedures/new", methods=["GET", "POST"])
@@ -446,7 +523,9 @@ def new_procedure():
                 flash("Invalid date format.", "warning")
                 return render_template("procedure_new.html")
 
-        procedure = Procedure(patient_name=patient_name, date=date_val, user_id=current_user.id)
+        procedure = Procedure(
+            patient_name=patient_name, date=date_val, user_id=current_user.id
+        )
         db.session.add(procedure)
         db.session.commit()
         return redirect(url_for("edit_procedure", procedure_id=procedure.id))
@@ -458,7 +537,7 @@ def new_procedure():
 @login_required
 def edit_procedure(procedure_id):
     procedure = Procedure.query.filter_by(
-        id=procedure_id, user_id=current_user.id, status='pending'
+        id=procedure_id, user_id=current_user.id, status="pending"
     ).first_or_404()
 
     size_filter = request.args.get("size_filter", "")
@@ -468,8 +547,14 @@ def edit_procedure(procedure_id):
         patient_name = request.form["patient_name"].strip()
         if not patient_name:
             flash("Patient name is required.", "warning")
-            return redirect(url_for("edit_procedure", procedure_id=procedure_id,
-                                    size_filter=size_filter, brand_filter=brand_filter))
+            return redirect(
+                url_for(
+                    "edit_procedure",
+                    procedure_id=procedure_id,
+                    size_filter=size_filter,
+                    brand_filter=brand_filter,
+                )
+            )
         procedure.patient_name = patient_name
         date_str = request.form.get("date", "").strip()
         procedure.date = None
@@ -480,8 +565,14 @@ def edit_procedure(procedure_id):
                 flash("Invalid date format.", "warning")
         db.session.commit()
         flash("Procedure details saved.", "success")
-        return redirect(url_for("edit_procedure", procedure_id=procedure_id,
-                                size_filter=size_filter, brand_filter=brand_filter))
+        return redirect(
+            url_for(
+                "edit_procedure",
+                procedure_id=procedure_id,
+                size_filter=size_filter,
+                brand_filter=brand_filter,
+            )
+        )
 
     # Implant picker query
     query = Implant.query.filter_by(user_id=current_user.id)
@@ -491,9 +582,32 @@ def edit_procedure(procedure_id):
         query = query.filter(Implant.brand == brand_filter)
     picker_implants = query.order_by(Implant.brand, Implant.size).all()
 
-    brands = [b[0] for b in db.session.query(Implant.brand)
-              .filter_by(user_id=current_user.id).distinct().all()]
+    brands = [
+        b[0]
+        for b in db.session.query(Implant.brand)
+        .filter_by(user_id=current_user.id)
+        .distinct()
+        .all()
+    ]
     brands.sort()
+
+    # Compute other_pending_counts: sum of qty in all OTHER pending procedures per implant
+    other_pending_rows = (
+        db.session.query(
+            ProcedureImplant.implant_id, db.func.sum(ProcedureImplant.quantity)
+        )
+        .join(Procedure)
+        .filter(
+            Procedure.user_id == current_user.id,
+            Procedure.status == "pending",
+            Procedure.id != procedure_id,
+        )
+        .group_by(ProcedureImplant.implant_id)
+        .all()
+    )
+    other_pending_counts = {
+        implant_id: total for implant_id, total in other_pending_rows
+    }
 
     return render_template(
         "procedure_edit.html",
@@ -502,6 +616,7 @@ def edit_procedure(procedure_id):
         brands=brands,
         size_filter=size_filter,
         brand_filter=brand_filter,
+        other_pending_counts=other_pending_counts,
     )
 
 
@@ -509,29 +624,18 @@ def edit_procedure(procedure_id):
 @login_required
 def add_procedure_implant(procedure_id):
     procedure = Procedure.query.filter_by(
-        id=procedure_id, user_id=current_user.id, status='pending'
+        id=procedure_id, user_id=current_user.id, status="pending"
     ).first_or_404()
 
     implant_id = int(request.form["implant_id"])
     quantity = max(1, int(request.form.get("quantity", 1)))
-    implant = Implant.query.filter_by(id=implant_id, user_id=current_user.id).first_or_404()
+    implant = Implant.query.filter_by(
+        id=implant_id, user_id=current_user.id
+    ).first_or_404()
 
     existing = ProcedureImplant.query.filter_by(
         procedure_id=procedure_id, implant_id=implant_id
     ).first()
-    current_qty = existing.quantity if existing else 0
-
-    if current_qty + quantity > implant.stock:
-        available = implant.stock - current_qty
-        msg = (f"Only {implant.stock} in stock"
-               + (f" ({available} available for this procedure)" if current_qty else "") + ".")
-        if is_ajax():
-            return jsonify({"ok": False, "message": msg})
-        size_filter = request.form.get("size_filter", "")
-        brand_filter = request.form.get("brand_filter", "")
-        flash(msg, "warning")
-        return redirect(url_for("edit_procedure", procedure_id=procedure_id,
-                                size_filter=size_filter, brand_filter=brand_filter))
 
     is_existing = existing is not None
     if existing:
@@ -544,22 +648,44 @@ def add_procedure_implant(procedure_id):
         db.session.add(item)
     db.session.commit()
 
+    other_pending = other_pending_qty(implant_id, procedure_id)
+    available = max(0, implant.stock - other_pending)
+    warning = item.quantity > available
+
     if is_ajax():
-        return jsonify({"ok": True, "item_id": item.id, "quantity": item.quantity,
-                        "brand": implant.brand, "size": implant.size,
-                        "is_existing": is_existing, "stock": implant.stock})
+        return jsonify(
+            {
+                "ok": True,
+                "item_id": item.id,
+                "quantity": item.quantity,
+                "brand": implant.brand,
+                "size": implant.size,
+                "is_existing": is_existing,
+                "stock": implant.stock,
+                "available": available,
+                "warning": warning,
+            }
+        )
 
     size_filter = request.form.get("size_filter", "")
     brand_filter = request.form.get("brand_filter", "")
-    return redirect(url_for("edit_procedure", procedure_id=procedure_id,
-                            size_filter=size_filter, brand_filter=brand_filter))
+    return redirect(
+        url_for(
+            "edit_procedure",
+            procedure_id=procedure_id,
+            size_filter=size_filter,
+            brand_filter=brand_filter,
+        )
+    )
 
 
-@app.route("/procedures/<int:procedure_id>/item/<int:item_id>/set-quantity", methods=["POST"])
+@app.route(
+    "/procedures/<int:procedure_id>/item/<int:item_id>/set-quantity", methods=["POST"]
+)
 @login_required
 def set_procedure_item_quantity(procedure_id, item_id):
     Procedure.query.filter_by(
-        id=procedure_id, user_id=current_user.id, status='pending'
+        id=procedure_id, user_id=current_user.id, status="pending"
     ).first_or_404()
     item = ProcedureImplant.query.filter_by(
         id=item_id, procedure_id=procedure_id
@@ -572,21 +698,31 @@ def set_procedure_item_quantity(procedure_id, item_id):
         db.session.commit()
         return jsonify({"ok": True, "removed": True})
 
-    implant = Implant.query.filter_by(id=item.implant_id, user_id=current_user.id).first()
-    if implant and quantity > implant.stock:
-        return jsonify({"ok": False,
-                        "message": f"Only {implant.stock} in stock — cannot set quantity to {quantity}."})
-
     item.quantity = quantity
     db.session.commit()
-    return jsonify({"ok": True, "removed": False, "quantity": item.quantity})
+
+    implant = Implant.query.filter_by(
+        id=item.implant_id, user_id=current_user.id
+    ).first()
+    warning = False
+    if implant:
+        available = max(
+            0, implant.stock - other_pending_qty(item.implant_id, procedure_id)
+        )
+        warning = item.quantity > available
+
+    return jsonify(
+        {"ok": True, "removed": False, "quantity": item.quantity, "warning": warning}
+    )
 
 
-@app.route("/procedures/<int:procedure_id>/remove-implant/<int:item_id>", methods=["POST"])
+@app.route(
+    "/procedures/<int:procedure_id>/remove-implant/<int:item_id>", methods=["POST"]
+)
 @login_required
 def remove_procedure_implant(procedure_id, item_id):
     Procedure.query.filter_by(
-        id=procedure_id, user_id=current_user.id, status='pending'
+        id=procedure_id, user_id=current_user.id, status="pending"
     ).first_or_404()
     item = ProcedureImplant.query.filter_by(
         id=item_id, procedure_id=procedure_id
@@ -599,30 +735,45 @@ def remove_procedure_implant(procedure_id, item_id):
 
     size_filter = request.form.get("size_filter", "")
     brand_filter = request.form.get("brand_filter", "")
-    return redirect(url_for("edit_procedure", procedure_id=procedure_id,
-                            size_filter=size_filter, brand_filter=brand_filter))
+    return redirect(
+        url_for(
+            "edit_procedure",
+            procedure_id=procedure_id,
+            size_filter=size_filter,
+            brand_filter=brand_filter,
+        )
+    )
 
 
 @app.route("/procedures/<int:procedure_id>/confirm", methods=["POST"])
 @login_required
 def confirm_procedure(procedure_id):
     procedure = Procedure.query.filter_by(
-        id=procedure_id, user_id=current_user.id, status='pending'
+        id=procedure_id, user_id=current_user.id, status="pending"
     ).first_or_404()
 
     if not procedure.items:
         if is_ajax():
-            return jsonify({"ok": False, "message": "Cannot confirm a procedure with no implants."})
+            return jsonify(
+                {"ok": False, "message": "Cannot confirm a procedure with no implants."}
+            )
         flash("Cannot confirm a procedure with no implants.", "warning")
         return redirect(url_for("procedures"))
 
     # Check all items have sufficient stock before making any changes
     insufficient = []
     for item in procedure.items:
-        implant = Implant.query.filter_by(id=item.implant_id, user_id=current_user.id).first()
-        if not implant or implant.stock < item.quantity:
-            name = f"{implant.brand} {implant.size}" if implant else f"(deleted implant)"
-            insufficient.append(f"{name} (need {item.quantity}, have {implant.stock if implant else 0})")
+        implant = Implant.query.filter_by(
+            id=item.implant_id, user_id=current_user.id
+        ).first()
+        available = (
+            max(0, implant.stock - other_pending_qty(item.implant_id, procedure_id))
+            if implant
+            else 0
+        )
+        if not implant or item.quantity > available:
+            name = f"{implant.brand} {implant.size}" if implant else "(deleted implant)"
+            insufficient.append(f"{name} (need {item.quantity}, available {available})")
     if insufficient:
         msg = f"Insufficient stock: {', '.join(insufficient)}."
         if is_ajax():
@@ -631,19 +782,28 @@ def confirm_procedure(procedure_id):
         return redirect(url_for("procedures"))
 
     for item in procedure.items:
-        implant = Implant.query.filter_by(id=item.implant_id, user_id=current_user.id).first()
+        implant = Implant.query.filter_by(
+            id=item.implant_id, user_id=current_user.id
+        ).first()
         if implant:
             implant.stock -= item.quantity
 
-    procedure.status = 'completed'
+    procedure.status = "completed"
     db.session.commit()
 
     if is_ajax():
-        return jsonify({"ok": True, "procedure_id": procedure.id,
-                        "message": f"Procedure for {procedure.patient_name} confirmed — stock updated."})
+        return jsonify(
+            {
+                "ok": True,
+                "procedure_id": procedure.id,
+                "message": f"Procedure for {procedure.patient_name} confirmed — stock updated.",
+            }
+        )
 
-    session['undo_id'] = procedure.id
-    flash(f"Procedure for {procedure.patient_name} confirmed — stock updated.", "success")
+    session["undo_id"] = procedure.id
+    flash(
+        f"Procedure for {procedure.patient_name} confirmed — stock updated.", "success"
+    )
     return redirect(url_for("procedures"))
 
 
@@ -651,21 +811,25 @@ def confirm_procedure(procedure_id):
 @login_required
 def undo_procedure(procedure_id):
     procedure = Procedure.query.filter_by(
-        id=procedure_id, user_id=current_user.id, status='completed'
+        id=procedure_id, user_id=current_user.id, status="completed"
     ).first_or_404()
 
     for item in procedure.items:
-        implant = Implant.query.filter_by(id=item.implant_id, user_id=current_user.id).first()
+        implant = Implant.query.filter_by(
+            id=item.implant_id, user_id=current_user.id
+        ).first()
         if implant:
             implant.stock += item.quantity
 
-    procedure.status = 'pending'
+    procedure.status = "pending"
     db.session.commit()
 
     if is_ajax():
         return jsonify({"ok": True})
 
-    flash(f"Procedure for {procedure.patient_name} has been restored to pending.", "info")
+    flash(
+        f"Procedure for {procedure.patient_name} has been restored to pending.", "info"
+    )
     return redirect(url_for("procedures"))
 
 
@@ -680,7 +844,9 @@ def cancel_procedure(procedure_id):
     db.session.commit()
 
     if is_ajax():
-        return jsonify({"ok": True, "message": f"Procedure for {patient_name} has been cancelled."})
+        return jsonify(
+            {"ok": True, "message": f"Procedure for {patient_name} has been cancelled."}
+        )
 
     flash(f"Procedure for {patient_name} has been cancelled.", "info")
     return redirect(url_for("procedures"))
@@ -725,8 +891,4 @@ def init_db():
 if __name__ == "__main__":
     # Uncomment the line below to reset the database (will delete all data)
     # init_db()
-
-    with app.app_context():
-        db.create_all()
-        # create_default_user()
     app.run(debug=False)

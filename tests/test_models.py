@@ -28,6 +28,11 @@ class TestIsLowStock:
         i = Implant(size="4.5x11.5", brand="Hiossen", stock=0, min_stock=0, user_id=1)
         assert i.is_low_stock() is True
 
+    def test_no_threshold_is_never_low(self, app):
+        # min_stock=None means no alert configured — never considered low
+        i = Implant(size="4.5x11.5", brand="Hiossen", stock=0, min_stock=None, user_id=1)
+        assert i.is_low_stock() is False
+
 
 class TestUserPassword:
     def test_set_and_check_password(self, app, user):
