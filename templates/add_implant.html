@@ -41,10 +41,13 @@
                                    min="0" value="0" required>
                         </div>
                         <div class="col-md-6">
-                            <label for="min_stock" class="form-label">Minimum Stock Level *</label>
-                            <input type="number" class="form-control" id="min_stock" name="min_stock" 
-                                   min="0" value="2" required>
-                            <div class="form-text">Alert will appear when stock reaches this level</div>
+                            <label class="form-label">Minimum Stock Level</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input class="min-stock-toggle" type="checkbox" id="enable_min_stock" title="Enable low stock alert">
+                                <input type="number" class="form-control" id="min_stock" name="min_stock"
+                                       min="0" value="2" disabled>
+                            </div>
+                            <div class="form-text">Check to enable low stock alerts</div>
                         </div>
                     </div>
                     
@@ -59,6 +62,12 @@
 </div>
 
 <script>
+document.getElementById('enable_min_stock').addEventListener('change', function() {
+    var input = document.getElementById('min_stock');
+    input.disabled = !this.checked;
+    if (!this.checked) input.value = '';
+});
+
 function toggleCustomBrand() {
     const brandSelect = document.getElementById('brand');
     const customBrandInput = document.getElementById('custom_brand');

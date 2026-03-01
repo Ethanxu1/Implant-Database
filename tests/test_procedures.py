@@ -153,34 +153,36 @@ class TestAddProcedureImplant:
         assert data["is_existing"] is True
         assert data["quantity"] == 5
 
-    def test_add_implant_exceeds_stock_rejected(self, auth_client, procedure, implant):
+    def test_add_implant_exceeds_stock_warns(self, auth_client, procedure, implant):
+        # Exceeding stock is now allowed — returns ok=True with warning=True
         resp = auth_client.post(
             f"/procedures/{procedure.id}/add-implant",
             data={"implant_id": implant.id, "quantity": str(implant.stock + 1)},
             headers=AJAX_HEADERS,
         )
         data = json.loads(resp.data)
-        assert data["ok"] is False
-        assert ProcedureImplant.query.filter_by(procedure_id=procedure.id).count() == 0
+        assert data["ok"] is True
+        assert data["warning"] is True
+        item = ProcedureImplant.query.filter_by(procedure_id=procedure.id).first()
+        assert item is not None
+        assert item.quantity == implant.stock + 1
 
-    def test_add_implant_merge_exceeds_stock_rejected(self, auth_client, procedure, implant):
-        # Reserve 8 of 10 in stock
+    def test_add_implant_merge_exceeds_stock_allowed(self, auth_client, procedure, implant):
+        # Merging beyond stock is now allowed
         auth_client.post(
             f"/procedures/{procedure.id}/add-implant",
             data={"implant_id": implant.id, "quantity": "8"},
             headers=AJAX_HEADERS,
         )
-        # Attempting to add 3 more (8+3=11 > 10) should be rejected
         resp = auth_client.post(
             f"/procedures/{procedure.id}/add-implant",
             data={"implant_id": implant.id, "quantity": "3"},
             headers=AJAX_HEADERS,
         )
         data = json.loads(resp.data)
-        assert data["ok"] is False
-        # Existing item quantity must still be 8
+        assert data["ok"] is True
         item = ProcedureImplant.query.filter_by(procedure_id=procedure.id, implant_id=implant.id).first()
-        assert item.quantity == 8
+        assert item.quantity == 11
 
     def test_add_implant_exactly_at_stock_allowed(self, auth_client, procedure, implant):
         resp = auth_client.post(
@@ -245,14 +247,18 @@ class TestSetProcedureItemQuantity:
         assert data["ok"] is True
         assert data["removed"] is True
 
-    def test_set_quantity_exceeds_stock_rejected(self, auth_client, procedure_with_implant, implant):
+    def test_set_quantity_exceeds_stock_warns(self, auth_client, procedure_with_implant, implant):
+        # Exceeding stock is now allowed — returns ok=True with warning=True
         item = procedure_with_implant.items[0]
         resp = auth_client.post(
             f"/procedures/{procedure_with_implant.id}/item/{item.id}/set-quantity",
             data={"quantity": str(implant.stock + 1)},
         )
         data = json.loads(resp.data)
-        assert data["ok"] is False
+        assert data["ok"] is True
+        assert data["warning"] is True
+        db.session.refresh(item)
+        assert item.quantity == implant.stock + 1
 
     def test_set_quantity_nonexistent_item_404(self, auth_client, procedure):
         resp = auth_client.post(
@@ -450,3 +456,75 @@ class TestCancelProcedure:
     def test_cancel_nonexistent_procedure_404(self, auth_client):
         resp = auth_client.post("/procedures/99999/cancel", headers=AJAX_HEADERS)
         assert resp.status_code == 404
+
+
+class TestCrossProcedureStockWarnings:
+    def test_add_implant_warns_when_combined_exceeds_stock(self, auth_client, user, implant):
+        """Two procedures share an implant; combined qty > stock → second gets warning=True."""
+        # implant.stock = 10; reserve 8 in proc_a first
+        proc_a = Procedure(patient_name="Patient A", user_id=user.id)
+        proc_b = Procedure(patient_name="Patient B", user_id=user.id)
+        db.session.add_all([proc_a, proc_b])
+        db.session.commit()
+
+        auth_client.post(
+            f"/procedures/{proc_a.id}/add-implant",
+            data={"implant_id": implant.id, "quantity": "8"},
+            headers=AJAX_HEADERS,
+        )
+
+        # Add 4 to proc_b — combined 8+4=12 > 10, so warning=True, available=2
+        resp = auth_client.post(
+            f"/procedures/{proc_b.id}/add-implant",
+            data={"implant_id": implant.id, "quantity": "4"},
+            headers=AJAX_HEADERS,
+        )
+        data = json.loads(resp.data)
+        assert data["ok"] is True
+        assert data["warning"] is True
+        assert data["available"] == 2  # stock(10) - other_pending(8) = 2
+
+    def test_confirm_blocked_by_cross_procedure_overcommit(self, auth_client, user, implant):
+        """Confirm is blocked when item.quantity + other_pending > stock."""
+        # implant.stock = 10; proc_a holds 7, proc_b holds 5 → combined 12 > 10
+        proc_a = Procedure(patient_name="Patient A", user_id=user.id)
+        proc_b = Procedure(patient_name="Patient B", user_id=user.id)
+        db.session.add_all([proc_a, proc_b])
+        db.session.flush()
+        db.session.add(ProcedureImplant(procedure_id=proc_a.id, implant_id=implant.id, quantity=7))
+        db.session.add(ProcedureImplant(procedure_id=proc_b.id, implant_id=implant.id, quantity=5))
+        db.session.commit()
+
+        original_stock = implant.stock
+
+        # Confirming proc_b: 5 + other_pending(7) = 12 > stock(10) → blocked
+        resp = auth_client.post(
+            f"/procedures/{proc_b.id}/confirm",
+            headers=AJAX_HEADERS,
+        )
+        data = json.loads(resp.data)
+        assert data["ok"] is False
+        assert "insufficient" in data["message"].lower()
+        db.session.refresh(implant)
+        assert implant.stock == original_stock
+
+    def test_confirm_allowed_when_combined_exactly_meets_stock(self, auth_client, user, implant):
+        """Confirm succeeds when item.quantity + other_pending == stock (not over)."""
+        # implant.stock = 10; proc_a holds 6, proc_b holds 4 → combined 10 == 10 → no overcommit
+        proc_a = Procedure(patient_name="Patient A", user_id=user.id)
+        proc_b = Procedure(patient_name="Patient B", user_id=user.id)
+        db.session.add_all([proc_a, proc_b])
+        db.session.flush()
+        db.session.add(ProcedureImplant(procedure_id=proc_a.id, implant_id=implant.id, quantity=6))
+        db.session.add(ProcedureImplant(procedure_id=proc_b.id, implant_id=implant.id, quantity=4))
+        db.session.commit()
+
+        # Confirming proc_b: 4 + other_pending(6) = 10 == stock(10) → allowed
+        resp = auth_client.post(
+            f"/procedures/{proc_b.id}/confirm",
+            headers=AJAX_HEADERS,
+        )
+        data = json.loads(resp.data)
+        assert data["ok"] is True
+        db.session.refresh(implant)
+        assert implant.stock == 6  # 10 - 4 deducted

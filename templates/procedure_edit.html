@@ -52,10 +52,21 @@
             <div class="card-body p-0">
                 <div class="procedure-items-list" id="selected-items-list">
                     {% for item in procedure.items %}
+                    {% set op = other_pending_counts.get(item.implant_id, 0) if item.implant else 0 %}
+                    {% set avail_for_item = item.implant.stock - op if item.implant and item.implant.stock > op else 0 %}
                     <div class="procedure-item-row" data-item-id="{{ item.id }}"
-                         data-stock="{{ item.implant.stock if item.implant else 0 }}">
+                         data-stock="{{ item.implant.stock if item.implant else 0 }}"
+                         data-available="{{ avail_for_item }}">
                         {% if item.implant %}
-                        <div class="procedure-item-name">{{ item.implant.brand }} {{ item.implant.size }}</div>
+                        <div class="procedure-item-name">
+                            {{ item.implant.brand }} {{ item.implant.size }}
+                            {% if item.quantity > avail_for_item %}
+                            <span class="text-warning ms-1 item-stock-warning"
+                                  title="Quantity exceeds available stock ({{ avail_for_item }} available after other procedures)">
+                                <i class="fas fa-triangle-exclamation"></i>
+                            </span>
+                            {% endif %}
+                        </div>
                         {% else %}
                         <div class="procedure-item-name" style="color:var(--text-dim)">(removed implant)</div>
                         {% endif %}
@@ -74,8 +85,7 @@
                                     data-action="adjust-item-qty"
                                     data-delta="1"
                                     data-item-id="{{ item.id }}"
-                                    data-set-url="{{ url_for('set_procedure_item_quantity', procedure_id=procedure.id, item_id=item.id) }}"
-                                    {% if item.implant and item.quantity >= item.implant.stock %}disabled{% endif %}>
+                                    data-set-url="{{ url_for('set_procedure_item_quantity', procedure_id=procedure.id, item_id=item.id) }}">
                                 <i class="fas fa-plus"></i>
                             </button>
                             <form method="POST"
@@ -147,13 +157,18 @@
                         </thead>
                         <tbody>
                             {% for implant in picker_implants %}
+                            {% set op = other_pending_counts.get(implant.id, 0) %}
+                            {% set avail = implant.stock - op if implant.stock > op else 0 %}
                             <tr class="{% if implant.is_low_stock() %}table-warning{% endif %}">
                                 <td>{{ implant.size }}</td>
                                 <td>{{ implant.brand }}</td>
                                 <td>
-                                    <span class="badge {% if implant.stock > implant.min_stock %}bg-success{% else %}bg-danger{% endif %}">
-                                        {{ implant.stock }}
+                                    <span class="badge {% if avail > implant.min_stock %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ avail }}
                                     </span>
+                                    {% if op > 0 %}
+                                    <small class="text-muted d-block" style="font-size:0.72rem; margin-top:2px;">{{ op }} in other procedures</small>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <form method="POST"

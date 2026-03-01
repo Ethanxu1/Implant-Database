@@ -43,10 +43,16 @@
                                    min="0" value="{{ implant.stock }}" required>
                         </div>
                         <div class="col-md-6">
-                            <label for="min_stock" class="form-label">Minimum Stock Level *</label>
-                            <input type="number" class="form-control" id="min_stock" name="min_stock" 
-                                   min="0" value="{{ implant.min_stock }}" required>
-                            <div class="form-text">Alert will appear when stock reaches this level</div>
+                            <label class="form-label">Minimum Stock Level</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input class="min-stock-toggle" type="checkbox" id="enable_min_stock"
+                                       title="Enable low stock alert"
+                                       {% if implant.min_stock is not none %}checked{% endif %}>
+                                <input type="number" class="form-control" id="min_stock" name="min_stock"
+                                       min="0" value="{{ implant.min_stock or '' }}"
+                                       {% if implant.min_stock is none %}disabled{% endif %}>
+                            </div>
+                            <div class="form-text">Check to enable low stock alerts</div>
                         </div>
                     </div>
                     
@@ -75,6 +81,12 @@ function toggleCustomBrand() {
         customBrandInput.value = brandSelect.value;
     }
 }
+
+document.getElementById('enable_min_stock').addEventListener('change', function() {
+    var input = document.getElementById('min_stock');
+    input.disabled = !this.checked;
+    if (!this.checked) input.value = '';
+});
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {

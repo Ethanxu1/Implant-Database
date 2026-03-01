@@ -102,15 +102,17 @@ document.addEventListener('click', function (e) {
   var row         = btn.closest('tr');
   var stockBadge  = row.querySelector('[data-stock]');
   var statusBadge = row.querySelector('[data-status-badge]');
-  var minStock    = parseInt(row.dataset.minStock, 10);
+  var minStockRaw = row.dataset.minStock;
+  var hasThreshold = minStockRaw !== '';
+  var minStock    = hasThreshold ? parseInt(minStockRaw, 10) : NaN;
   var unitsCard   = document.querySelector('[data-stat="units"]');
 
   var oldStock = parseInt(stockBadge.textContent, 10);
   if (oldStock <= 0) return;
 
   var newStock = oldStock - 1;
-  var isLow    = newStock <= minStock;
-  var wasLow   = oldStock <= minStock;
+  var isLow    = hasThreshold && newStock <= minStock;
+  var wasLow   = hasThreshold && oldStock <= minStock;
 
   // Optimistic update
   btn.classList.add('is-loading');
@@ -180,6 +182,8 @@ document.addEventListener('submit', function (e) {
           var existingRow = list.querySelector('[data-item-id="' + data.item_id + '"]');
           if (existingRow) {
             existingRow.querySelector('.procedure-item-qty-val').textContent = data.quantity;
+            existingRow.dataset.available = data.available;
+            applyWarningIcon(existingRow, data.warning);
           }
           var placeholder = document.getElementById(tempId);
           if (placeholder) placeholder.remove();
@@ -191,13 +195,19 @@ document.addEventListener('submit', function (e) {
           var setQtyUrl   = '/procedures/' + procedureId + '/item/' + data.item_id + '/set-quantity';
           var removeUrl   = '/procedures/' + procedureId + '/remove-implant/' + data.item_id;
 
-          var atCeiling = data.quantity >= data.stock;
+          var warnHtml = data.warning
+            ? '<span class="text-warning ms-1 item-stock-warning"' +
+              ' title="Quantity exceeds available stock after other pending procedures">' +
+              '<i class="fas fa-triangle-exclamation"></i></span>'
+            : '';
+
           var realRow = document.createElement('div');
           realRow.className = 'procedure-item-row';
-          realRow.dataset.itemId = data.item_id;
-          realRow.dataset.stock  = data.stock;
+          realRow.dataset.itemId   = data.item_id;
+          realRow.dataset.stock    = data.stock;
+          realRow.dataset.available = data.available;
           realRow.innerHTML =
-            '<div class="procedure-item-name">' + data.brand + ' ' + data.size + '</div>' +
+            '<div class="procedure-item-name">' + data.brand + ' ' + data.size + warnHtml + '</div>' +
             '<div class="procedure-item-controls">' +
               '<button type="button" class="btn btn-outline-secondary btn-sm procedure-qty-btn"' +
                   ' title="Decrease" data-action="adjust-item-qty" data-delta="-1"' +
@@ -207,8 +217,7 @@ document.addEventListener('submit', function (e) {
               '<span class="procedure-item-qty-val">' + data.quantity + '</span>' +
               '<button type="button" class="btn btn-outline-secondary btn-sm procedure-qty-btn"' +
                   ' title="Increase" data-action="adjust-item-qty" data-delta="1"' +
-                  ' data-item-id="' + data.item_id + '" data-set-url="' + setQtyUrl + '"' +
-                  (atCeiling ? ' disabled' : '') + '>' +
+                  ' data-item-id="' + data.item_id + '" data-set-url="' + setQtyUrl + '">' +
                 '<i class="fas fa-plus"></i>' +
               '</button>' +
               '<form method="POST" action="' + removeUrl + '" class="d-inline"' +
@@ -260,17 +269,11 @@ document.addEventListener('click', function (e) {
   var oldQty = parseInt(qtyEl.textContent, 10);
   var newQty = oldQty + delta;
 
-  // Block + when already at stock ceiling
-  if (delta > 0 && oldQty >= stock) {
-    showToast('Cannot exceed available stock (' + stock + ').', 'warning');
-    return;
-  }
-
   // Optimistic update
-  btn.classList.add('is-loading');
   if (newQty <= 0) {
-    // Will remove the row — save HTML for potential revert
+    // Will remove the row — save HTML for potential revert (before any mutation)
     var rowHTML  = row.outerHTML;
+    btn.classList.add('is-loading');
     var parent   = row.parentNode;
     var nextSib  = row.nextSibling;
     row.remove();
@@ -292,24 +295,22 @@ document.addEventListener('click', function (e) {
       });
   } else {
     qtyEl.textContent = newQty;
-    var plusBtn = row.querySelector('[data-delta="1"]');
-    if (plusBtn) plusBtn.disabled = (newQty >= stock);
 
     var formData = new FormData();
     formData.append('quantity', newQty);
     fetchAction(url, { method: 'POST', body: formData })
       .then(function (data) {
         btn.classList.remove('is-loading');
-        if (!data.ok) {
+        if (data.ok) {
+          applyWarningIcon(row, data.warning);
+        } else {
           qtyEl.textContent = oldQty;
-          if (plusBtn) plusBtn.disabled = (oldQty >= stock);
           showToast(data.message || 'Failed to update quantity.', 'danger');
         }
       })
       .catch(function () {
         btn.classList.remove('is-loading');
         qtyEl.textContent = oldQty;
-        if (plusBtn) plusBtn.disabled = (oldQty >= stock);
         showToast('Action failed — please try again.', 'danger');
       });
   }
@@ -354,6 +355,25 @@ function revertRemove(parent, nextSib, rowHTML, countBadge, emptyMsg) {
   parent.insertBefore(temp.firstChild, nextSib);
   if (countBadge) countBadge.textContent = parseInt(countBadge.textContent, 10) + 1;
   if (emptyMsg) emptyMsg.style.display = 'none';
+}
+
+// ── Warning icon helper ────────────────────────────────────────────────────────
+
+function applyWarningIcon(row, warning) {
+  var nameEl = row.querySelector('.procedure-item-name');
+  if (!nameEl) return;
+  var existing = nameEl.querySelector('.item-stock-warning');
+  if (warning) {
+    if (!existing) {
+      var span = document.createElement('span');
+      span.className = 'text-warning ms-1 item-stock-warning';
+      span.title = 'Quantity exceeds available stock after other pending procedures';
+      span.innerHTML = '<i class="fas fa-triangle-exclamation"></i>';
+      nameEl.appendChild(span);
+    }
+  } else {
+    if (existing) existing.remove();
+  }
 }
 
 // ── 4. Confirm Procedure ──────────────────────────────────────────────────────

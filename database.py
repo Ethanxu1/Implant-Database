@@ -23,11 +23,13 @@ class Implant(db.Model):
     size = db.Column(db.String(50), nullable=False)
     brand = db.Column(db.String(100), nullable=False)
     stock = db.Column(db.Integer, nullable=False)
-    min_stock = db.Column(db.Integer, nullable=False)
+    min_stock = db.Column(db.Integer, nullable=True)
     # Foreign key to associate with user
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
     def is_low_stock(self):
+        if self.min_stock is None:
+            return False
         return self.stock <= self.min_stock
 
 class Procedure(db.Model):

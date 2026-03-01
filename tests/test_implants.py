@@ -91,6 +91,17 @@ class TestAddImplant:
         i = Implant.query.filter_by(size="3.7x8.0", user_id=user.id).first()
         assert i.stock == 0
 
+    def test_add_without_min_stock(self, auth_client, user):
+        resp = auth_client.post(
+            "/add",
+            data={"size": "5.0x12.0", "brand": "Astra", "custom_brand": "", "stock": "3", "min_stock": ""},
+            follow_redirects=True,
+        )
+        assert b"Implant added successfully" in resp.data
+        i = Implant.query.filter_by(size="5.0x12.0", user_id=user.id).first()
+        assert i is not None
+        assert i.min_stock is None
+
 
 class TestEditImplant:
     def test_get_edit_page(self, auth_client, implant):
@@ -114,6 +125,16 @@ class TestEditImplant:
         assert implant.size == "4.5x13.0"
         assert implant.stock == 8
         assert implant.min_stock == 3
+
+    def test_edit_clears_min_stock(self, auth_client, implant):
+        resp = auth_client.post(
+            f"/edit/{implant.id}",
+            data={"size": "4.5x11.5", "brand": "Hiossen", "custom_brand": "", "stock": "10", "min_stock": ""},
+            follow_redirects=True,
+        )
+        assert b"Implant updated successfully" in resp.data
+        db.session.refresh(implant)
+        assert implant.min_stock is None
 
     def test_edit_duplicate_rejected(self, auth_client, user, implant):
         other = Implant(size="3.5x10.0", brand="Megagen", stock=5, min_stock=1, user_id=user.id)
